@@ -10,7 +10,7 @@ Pin To TaskBar in C:
   - Another helpful reverse engineering project of syspin.exe in C++, which is much more faithful to the source : https://github.com/airwolf2026/Win10Pin2TB
 
 
-Compiled with NSYS2/MinGW-w64:
+Compiled with MSYS2/MinGW-w64:
 
 	$ gcc -o pttb pttb.c -Lmingw64/x86_64-w64-mingw32/lib -lole32 -loleaut32 -luuid -s -O3 -Wl,--gc-sections -nostartfiles --entry=pttb
 
