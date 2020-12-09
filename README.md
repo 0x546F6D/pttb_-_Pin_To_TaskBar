@@ -1,4 +1,4 @@
-# pttb_-_Pin_To_TaskBar
+# pttb - Pin To TaskBar
 
 
 Pin To TaskBar in C:
