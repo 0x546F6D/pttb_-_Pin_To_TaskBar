@@ -88,7 +88,7 @@ void pttb() {
 		vRelocVirtAdd		= adrVirtAlloc + (int64_t)*(int32_t*)pRelocVirtAdd;										// Virtual Address relocation offset according ImageBase
 		pRelocVirtAdd	   += 8;																					// 8: size of struct _IMAGE_BASE_RELOCATION // jump to 1st Descriptor to relocate
 		if (RelocBlockSize >= 8) {																					// Block size must be > size of struct _IMAGE_BASE_RELOCATION in order to have any Descriptor
-			int32_t RelocNbDesc	= (RelocBlockSize - 8) / 2;															// number of Blocks to relocate: RelocBlockSize in BYTE, but relocation done in int16_t
+			int32_t RelocNbDesc	= (RelocBlockSize - 8) / 2;															// number of descriptors in this block: RelocBlockSize in BYTE, but descriptors in int16_t
 			for (int32_t ct=0; ct<RelocNbDesc; ct++) {
 				int16_t vRelocDescOffset = (int16_t)*(int16_t*)pRelocVirtAdd & 0x0FFF;								// Get descriptor offset of Virtual address to relocate
 				if (vRelocDescOffset != 0) { *(int64_t*)(vRelocVirtAdd + vRelocDescOffset) += delta; }				// Add "delta" to the value at this address
@@ -105,7 +105,7 @@ void pttb() {
 	LPVOID lpParameter = (LPVOID)((LPBYTE)lpVirtAllocEx + szImage);
 	HANDLE hdThread = CreateRemoteThread(hdProcess, NULL, 0, lpStartAddress, lpParameter, 0, NULL);
 // Wait for the Thread to finish and clean it up
-	WaitForSingleObject(hdThread, 30000);
+	WaitForSingleObject(hdThread, 5000);
 	TerminateThread(hdThread, 0);
 	CloseHandle(hdThread);
 // Clean Up Everything
@@ -154,23 +154,23 @@ static DWORD WINAPI PinToTaskBar_func(LPSTR lpdata) {
 // -------------------- "Pin to tas&kbar" Core -------------------- Function
 void PinToTaskBar_core (char* pcFolder, char* pcFile, wchar_t* pwcPinToTaskBar, wchar_t* pwcUnPinFromTaskBar, IShellDispatch* pISD) {
 // Convert to wchar_t for Variant VT_BSTR type
-	wchar_t wcFolder[MAX_PATH] = {'\0'};
-	mbstowcs_s(NULL, wcFolder, MAX_PATH, pcFolder, MAX_PATH);
-	wchar_t wcFileName[MAX_PATH] = {'\0'};
-	mbstowcs_s(NULL, wcFileName, MAX_PATH, pcFile, MAX_PATH);
+	wchar_t awcFolder[MAX_PATH] = {'\0'};
+	mbstowcs_s(NULL, awcFolder, MAX_PATH, pcFolder, MAX_PATH);
+	wchar_t awcFileName[MAX_PATH] = {'\0'};
+	mbstowcs_s(NULL, awcFileName, MAX_PATH, pcFile, MAX_PATH);
 // Create a "Folder" Object of the directory containing the file to Pin/Unpin
 	Folder *pFolder;
 	VARIANTARG varTmp;
 	VariantInit(&varTmp);
 	varTmp.vt = VT_BSTR;
-	varTmp.bstrVal = (BSTR)wcFolder;
+	varTmp.bstrVal = (BSTR)awcFolder;
 	pISD->lpVtbl->NameSpace(pISD, varTmp, &pFolder);
 // Create a "FolderItem" Object of the file to Pin/Unpin
 	FolderItem* pFI;
-	pFolder->lpVtbl->ParseName(pFolder, (BSTR)wcFileName, &pFI);
-// Initialise the list of verbs and search for "Unpin from tas&kbar". If found: execute it
+	pFolder->lpVtbl->ParseName(pFolder, (BSTR)awcFileName, &pFI);
+// Initialise the list of Verbs and search for "Unpin from tas&kbar". If found: execute it
 	if(pwcUnPinFromTaskBar) ExecuteVerb(pwcUnPinFromTaskBar, pFI);
-// Initialise the list of verbs and search for "Pin to tas&kbar". If found: execute it
+// Initialise the list of Verbs and search for "Pin to tas&kbar". If found: execute it
 	if(pwcPinToTaskBar) ExecuteVerb(pwcPinToTaskBar, pFI);
 // Clean Up
 	pFI->lpVtbl->Release(pFI);
@@ -181,20 +181,20 @@ void PinToTaskBar_core (char* pcFolder, char* pcFile, wchar_t* pwcPinToTaskBar, 
 void ExecuteVerb(wchar_t* pwcVerb, FolderItem* pFI) {
 	int lgtVerb = wcsnlen_s((const wchar_t*)pwcVerb, MAX_PATH);
 	wchar_t* pwcTmp = pwcVerb;
-// Create a "FolderItemVerbs" Object of the verbs corresponding to the file, including "Pin to tas&kbar" or "Unpin from tas&kbar"
+// Create a "FolderItemVerbs" Object of the Verbs corresponding to the file, including "Pin to tas&kbar" or "Unpin from tas&kbar"
 	FolderItemVerbs* pFIVs;
 	pFI->lpVtbl->Verbs(pFI, &pFIVs);
-// Get the number of verbs corresponding to the file to pin to taskbar
+// Get the number of Verbs corresponding to the file to Pin/Unpin
 	LONG nbVerbs;
 	pFIVs->lpVtbl->get_Count(pFIVs, &nbVerbs);
-// Create a "FolderItemVerb" Object to go through the list of verbs until pwcVerb is found, and if found: execute it
+// Create a "FolderItemVerb" Object to go through the list of Verbs until pwcVerb is found, and if found: execute it
 	FolderItemVerb* pFIV;
 	BSTR pFIVName;
 	VARIANTARG varTmp;
 	VariantInit(&varTmp);
 	varTmp.vt = VT_I4;
-	for (int i = 0; i < nbVerbs; i++) {
-		varTmp.lVal = i;
+	for (int ct = 0; ct < nbVerbs; ct++) {
+		varTmp.lVal = ct;
 		pFIVs->lpVtbl->Item(pFIVs, varTmp, &pFIV);
 		pFIV->lpVtbl->get_Name(pFIV, &pFIVName);
 		if (wcsnlen_s(pFIVName, MAX_PATH) == lgtVerb) {
