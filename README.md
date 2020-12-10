@@ -30,3 +30,7 @@ Notes:
     - Doesn't work anymore either
   - So I ended up using the PE injection method used by syspin.exe from https://www.technosys.net
     - Thanks Microsoft for making it a bit more difficult, I learned quite a bit with this little project
+
+To view the source code in your browser with proper tabbing (4 white-spaces instead of browsers default 8), add /?ts=4 to url.  
+Works on Firefox/Chrome based browser, except for edge..  
+https://github.com/0x546F6D/pttb_-_Pin_To_TaskBar/blob/main/pttb_PinToTaskBar/pttb.c/?ts=4
