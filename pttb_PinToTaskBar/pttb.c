@@ -37,8 +37,8 @@ void WriteToConsoleA(LPSTR lpMsg);																					// "Write to Console A" f
 // void WriteToConsoleW(LPWSTR lpMsg);																					// "Write to Console W" function instead of printf and <stdio.h>
 
 // -------------------- C Function Prototypes --------------------
-// int sprintf(char *str, const char *format, ...);
-int access(const char *pathname, int how);
+// int sprintf(char* str, const char* format, ...);
+int access(const char* pathname, int how);
 
 // -------------------- Global Variables --------------------
 HANDLE WINAPI hdConsoleOut;
@@ -67,8 +67,8 @@ void pttb() {
 // Get relevant addresses to this current process, as well as the image size
 	HMODULE hdModule		= GetModuleHandle(NULL);		
 	int64_t adrModule		= (int64_t)hdModule;
-	int64_t adrPE			= adrModule + (int64_t)*(int32_t *)(adrModule + 0x3C);									// 0x3C: IMAGE_DOS_HEADER -> e_lfanew // Gives offset to IMAGE_NT_HEADERS
-	uint32_t szImage		= (uint32_t)*(int64_t *)(adrPE + 0x50);													// 0x50: IMAGE_NT_HEADERS -> IMAGE_OPTIONAL_HEADER -> SizeOfImage // Gives the size of this current process in memory
+	int64_t adrPE			= adrModule + (int64_t)*(int32_t*)(adrModule + 0x3C);									// 0x3C: IMAGE_DOS_HEADER -> e_lfanew // Gives offset to IMAGE_NT_HEADERS
+	uint32_t szImage		= (uint32_t)*(int64_t*)(adrPE + 0x50);													// 0x50: IMAGE_NT_HEADERS -> IMAGE_OPTIONAL_HEADER -> SizeOfImage // Gives the size of this current process in memory
 	// WriteIntToConsoleA(szImage);
 // Reserve a local region of memory equal to "szImage" and make a copy of itself into it
 	LPVOID lpVirtAlloc		= VirtualAlloc(NULL, (SIZE_T)szImage, 0x3000, 64);
@@ -78,7 +78,7 @@ void pttb() {
 	LPVOID lpVirtAllocEx	= VirtualAllocEx(hdProcess, NULL, (SIZE_T)(szImage + MAX_PATH), 0x3000, 64);
 	int64_t adrVirtAllocEx	= (int64_t)lpVirtAllocEx;
 // Check if any Virtual Address in the current process need to be relocated 
-	int64_t vRelocVirtAdd	= ((int64_t)*(int32_t *)(adrPE + 180) != 0) ? (int64_t)*(int32_t *)(adrPE + 176) : 0;	// 176/180: IMAGE_NT_HEADERS -> IMAGE_OPTIONAL_HEADER -> IMAGE_DATA_DIRECTORY -> Base relocation table address/size
+	int64_t vRelocVirtAdd	= ((int64_t)*(int32_t*)(adrPE + 180) != 0) ? (int64_t)*(int32_t*)(adrPE + 176) : 0;	// 176/180: IMAGE_NT_HEADERS -> IMAGE_OPTIONAL_HEADER -> IMAGE_DATA_DIRECTORY -> Base relocation table address/size
 	int64_t pRelocVirtAdd	= adrVirtAlloc + vRelocVirtAdd;															// Address of the Relocation Table
 	int64_t delta 			= adrVirtAllocEx - adrModule;															// Relocation Offset between the current process and the reserved memory region in the "Progman" process
 // Relocate every block of virtual address
@@ -153,15 +153,15 @@ static DWORD WINAPI PinToTaskBar_func(LPSTR pdata) {
 	FolderItemVerbs* pFIVs;
 	pFI->lpVtbl->Verbs(pFI, &pFIVs);
 // Get the number of verbs corresponding to the file to pin to taskbar
-	LONG NbVerbs;
-	pFIVs->lpVtbl->get_Count(pFIVs, &NbVerbs);
+	LONG nbVerbs;
+	pFIVs->lpVtbl->get_Count(pFIVs, &nbVerbs);
 	// char cMsg[MAX_PATH] = {'\0'};
-	// sprintf(cMsg, "NbVerbs : %d", NbVerbs);
+	// sprintf(cMsg, "nbVerbs : %d", nbVerbs);
 	// MessageBox(NULL, cMsg, "Number of Verbs", 0);
 // Create a "FolderItemVerb" Object, go through the list of verbs until "Pin to tas&kbar" is found, then execute it
 	FolderItemVerb* pFIV;
 	varTmp.vt = VT_I4;
-	for (int i = 0; i < NbVerbs; i++) {
+	for (int i = 0; i < nbVerbs; i++) {
 		varTmp.lVal = i;
 		pFIVs->lpVtbl->Item(pFIVs, varTmp, &pFIV);
 		BSTR pFIVName;
