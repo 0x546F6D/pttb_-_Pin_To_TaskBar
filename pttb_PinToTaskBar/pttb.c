@@ -182,17 +182,16 @@ static DWORD WINAPI PinToTaskBar_func(LPSTR pdata) {
 
 // -------------------- Get arguments from command line -------------------- function.. just a personal preference for char*/LPSTR instead of the wchar_t*/LPWSTR type provided by "CommandLineToArgvW()"
 void GetCommandLineArgvA(LPSTR pCommandLine, LPSTR* aArgs) {
-	LPSTR* pArgs = (LPSTR*)aArgs;
 	while (*pCommandLine) {
 		while (*pCommandLine && *pCommandLine == ' ') pCommandLine++;												// Trim white-spaces before the argument
 		char cEnd = ' ';																							// end of argument is defined as white-space..
 		if (*pCommandLine == '\"') { pCommandLine++; cEnd = '\"'; }													// ..or as a double quote if argument is between double quotes
-		*pArgs = pCommandLine;																						// Save argument pointer
+		*aArgs = pCommandLine;																						// Save argument pointer
 		while (*pCommandLine && *pCommandLine != cEnd) pCommandLine++;
 		if (*pCommandLine) *pCommandLine = 0;																		// Set NULL separator between arguments
 		pCommandLine++;
-		pArgs++; }
-	*pArgs = 0;
+		aArgs++; }
+	*aArgs = 0;
 }
 
 // -------------------- "Write to Console A" -------------------- function instead of printf and <stdio.h>
