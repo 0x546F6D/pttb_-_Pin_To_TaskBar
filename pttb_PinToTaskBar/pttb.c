@@ -31,15 +31,16 @@
 
 // -------------------- Project Function Prototypes --------------------
 static DWORD WINAPI PinToTaskBar_func(LPSTR pdata);																	// "Pin to tas&kbar" Function to call once injected in "Progman"
+void PinToTaskBar_core (char* pcFolder, char* pcFile, wchar_t* pwcPinToTaskBar, wchar_t* pwcUnPinFromTaskBar, IShellDispatch* pISD);	// Core Function of "PinToTaskBar_func"
+void ExecuteVerb(wchar_t* pwcVerb, FolderItem* pFI);																// Execute Verb if found
 void GetCommandLineArgvA(LPSTR pCommandLine, LPSTR* aArgs);															// Get arguments from command line.. just a personal preference for char*/LPSTR instead of the wchar_t*/LPWSTR type provided by "CommandLineToArgvW()"
 void WriteToConsoleA(LPSTR lpMsg);																					// "Write to Console A" function instead of printf and <stdio.h>
 // void WriteIntToConsoleA(int num);																					// "Write Integer as Hex to Console A" function instead of printf and <stdio.h>
 // void WriteToConsoleW(LPWSTR lpMsg);																					// "Write to Console W" function instead of printf and <stdio.h>
 
 // -------------------- C Function Prototypes --------------------
-// int sprintf(char* str, const char* format, ...);
 int access(const char* pathname, int how);
-
+int sprintf(char* buffer, const char* format, ...);
 // -------------------- Global Variables --------------------
 HANDLE WINAPI hdConsoleOut;
 
@@ -104,7 +105,7 @@ void pttb() {
 	LPVOID lpParameter = (LPVOID)((LPBYTE)lpVirtAllocEx + szImage);
 	HANDLE hdThread = CreateRemoteThread(hdProcess, NULL, 0, lpStartAddress, lpParameter, 0, NULL);
 // Wait for the Thread to finish and clean it up
-	WaitForSingleObject(hdThread, 5000);
+	WaitForSingleObject(hdThread, 30000);
 	TerminateThread(hdThread, 0);
 	CloseHandle(hdThread);
 // Clean Up Everything
@@ -115,69 +116,94 @@ void pttb() {
 }
 
 // -------------------- "Pin to tas&kbar" -------------------- Function to call once injected in "Progman"
-static DWORD WINAPI PinToTaskBar_func(LPSTR pdata) {
-// Get directory Path and Filename from pdata
-	LPSTR pPath = pdata;
-	LPSTR pFile = NULL;
-	while (*pdata) {
-		if(*pdata == '\\') pFile = pdata;
-		++pdata;}
-	*pFile = 0;
-	pFile += 1;
-// Convert to wchar_t for Variant VT_BSTR type
-	wchar_t wcFolder[MAX_PATH] = {'\0'};
-	mbstowcs_s(NULL, wcFolder, MAX_PATH, pPath, MAX_PATH);
-	wchar_t wcFileName[MAX_PATH] = {'\0'};
-	mbstowcs_s(NULL, wcFileName, MAX_PATH, pFile, MAX_PATH);
-// Get "Pin to tas&kbar" verb in Windows locale
-	wchar_t* wcPinToTaskBar = L"Pin to tas&kbar";
+static DWORD WINAPI PinToTaskBar_func(LPSTR lpdata) {
+// Get directory and Filename from pdata
+	LPSTR lpDir = lpdata;
+	LPSTR lpFile = NULL;
+	while (*lpdata) {
+		if(*lpdata == '\\') lpFile = lpdata;
+		lpdata++;}
+	*lpFile = 0;
+	lpFile += 1;
+// Get "Pin to tas&kbar" and "Unpin from tas&kbar" Verbs in Windows locale
+	wchar_t* pwcPinToTaskBar = L"Pin to tas&kbar";
+	wchar_t* pwcUnPinFromTaskBar = L"Unpin from tas&kbar";
 	HMODULE hmLoadLibShell = LoadLibraryW(L"shell32.dll");
-	LoadStringW(GetModuleHandleW(L"shell32.dll"), 5386, (LPWSTR)wcPinToTaskBar, MAX_PATH);							// Should be "Pin to tas&kbar" in en-us locale versions of Windows
+	LoadStringW(GetModuleHandleW(L"shell32.dll"), 5386, (LPWSTR)pwcPinToTaskBar, MAX_PATH);							// Should be "Pin to tas&kbar" in en-us locale versions of Windows
+	LoadStringW(GetModuleHandleW(L"shell32.dll"), 5387, (LPWSTR)pwcUnPinFromTaskBar, MAX_PATH);						// Should be "Unpin from tas&kbar" in en-us locale versions of Windows
 	FreeLibrary(hmLoadLibShell);
-	int lgtPTB = wcsnlen_s((const wchar_t*)wcPinToTaskBar, MAX_PATH);
 // Create COM Objects
 	CoInitialize(NULL);
 	IShellDispatch* pISD;
 	CoCreateInstance(&CLSID_Shell, NULL, CLSCTX_INPROC_SERVER, &IID_IShellDispatch, (LPVOID*)&pISD);
-// Create a "Folder" Object of the directory containing the file to pin to taskbar
+// Check if Shorcut is already pinned, and if so: unpin it directly from %AppData%\Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar\shorcut.lnk, because Windows föks up when Unpinning+Pinning shorcuts with same path/name.lnk, but whose target/arguments have been modified..
+	char acTaskBarStorage[MAX_PATH] = {'\0'};
+	sprintf(acTaskBarStorage, "%s\\Microsoft\\Internet Explorer\\Quick Launch\\User Pinned\\TaskBar", getenv("AppData"));
+	char acTaskBarShorCut[MAX_PATH] = {'\0'};
+	sprintf(acTaskBarShorCut, "%s\\%s", acTaskBarStorage, lpFile);
+	if (access(acTaskBarShorCut, 0) == 0) PinToTaskBar_core(acTaskBarStorage, lpFile, NULL, pwcUnPinFromTaskBar, pISD);
+// Unpin Prog from taskbar if pinned and Pin Prog/ShorCut
+	PinToTaskBar_core(lpDir, lpFile, pwcPinToTaskBar, pwcUnPinFromTaskBar, pISD);
+// Clean Up
+	pISD->lpVtbl->Release(pISD);
+	CoUninitialize();
+	// MessageBox(NULL, "Check the TaskBar", "Done", 0);
+	return 0;
+}
+
+// -------------------- "Pin to tas&kbar" Core -------------------- Function
+void PinToTaskBar_core (char* pcFolder, char* pcFile, wchar_t* pwcPinToTaskBar, wchar_t* pwcUnPinFromTaskBar, IShellDispatch* pISD) {
+// Convert to wchar_t for Variant VT_BSTR type
+	wchar_t wcFolder[MAX_PATH] = {'\0'};
+	mbstowcs_s(NULL, wcFolder, MAX_PATH, pcFolder, MAX_PATH);
+	wchar_t wcFileName[MAX_PATH] = {'\0'};
+	mbstowcs_s(NULL, wcFileName, MAX_PATH, pcFile, MAX_PATH);
+// Create a "Folder" Object of the directory containing the file to Pin/Unpin
+	Folder *pFolder;
 	VARIANTARG varTmp;
 	VariantInit(&varTmp);
 	varTmp.vt = VT_BSTR;
 	varTmp.bstrVal = (BSTR)wcFolder;
-	Folder *pFolder;
 	pISD->lpVtbl->NameSpace(pISD, varTmp, &pFolder);
-// Create a "FolderItem" Object of the file to pin to taskbar
+// Create a "FolderItem" Object of the file to Pin/Unpin
 	FolderItem* pFI;
-	pFolder->lpVtbl->ParseName(pFolder, (BSTR)(wcFileName), &pFI);
-// Create a "FolderItemVerbs" Object of the verbs corresponding to the file, including "Pin to tas&kbar"
+	pFolder->lpVtbl->ParseName(pFolder, (BSTR)wcFileName, &pFI);
+// Initialise the list of verbs and search for "Unpin from tas&kbar". If found: execute it
+	if(pwcUnPinFromTaskBar) ExecuteVerb(pwcUnPinFromTaskBar, pFI);
+// Initialise the list of verbs and search for "Pin to tas&kbar". If found: execute it
+	if(pwcPinToTaskBar) ExecuteVerb(pwcPinToTaskBar, pFI);
+// Clean Up
+	pFI->lpVtbl->Release(pFI);
+	pFolder->lpVtbl->Release(pFolder);
+}
+
+// -------------------- "Execute Verb" -------------------- Function
+void ExecuteVerb(wchar_t* pwcVerb, FolderItem* pFI) {
+	int lgtVerb = wcsnlen_s((const wchar_t*)pwcVerb, MAX_PATH);
+	wchar_t* pwcTmp = pwcVerb;
+// Create a "FolderItemVerbs" Object of the verbs corresponding to the file, including "Pin to tas&kbar" or "Unpin from tas&kbar"
 	FolderItemVerbs* pFIVs;
 	pFI->lpVtbl->Verbs(pFI, &pFIVs);
 // Get the number of verbs corresponding to the file to pin to taskbar
 	LONG nbVerbs;
 	pFIVs->lpVtbl->get_Count(pFIVs, &nbVerbs);
-	// char cMsg[MAX_PATH] = {'\0'};
-	// sprintf(cMsg, "nbVerbs : %d", nbVerbs);
-	// MessageBox(NULL, cMsg, "Number of Verbs", 0);
-// Create a "FolderItemVerb" Object, go through the list of verbs until "Pin to tas&kbar" is found, then execute it
+// Create a "FolderItemVerb" Object to go through the list of verbs until pwcVerb is found, and if found: execute it
 	FolderItemVerb* pFIV;
+	BSTR pFIVName;
+	VARIANTARG varTmp;
+	VariantInit(&varTmp);
 	varTmp.vt = VT_I4;
 	for (int i = 0; i < nbVerbs; i++) {
 		varTmp.lVal = i;
 		pFIVs->lpVtbl->Item(pFIVs, varTmp, &pFIV);
-		BSTR pFIVName;
 		pFIV->lpVtbl->get_Name(pFIV, &pFIVName);
-		if (wcsnlen_s(pFIVName, MAX_PATH) == lgtPTB) {
-			while (*wcPinToTaskBar && *wcPinToTaskBar == *pFIVName) { wcPinToTaskBar++; pFIVName++; }
-			if (!*wcPinToTaskBar && !*pFIVName) { pFIV->lpVtbl->DoIt(pFIV); break; }}}
+		if (wcsnlen_s(pFIVName, MAX_PATH) == lgtVerb) {
+			while (*pwcTmp && *pwcTmp == *pFIVName) { pwcTmp++; pFIVName++; }
+			if (!*pwcTmp && !*pFIVName) { pFIV->lpVtbl->DoIt(pFIV); break; }
+			pwcTmp = pwcVerb; }}
 // Clean Up
 	pFIV->lpVtbl->Release(pFIV);
-	pFIVs->lpVtbl->Release(pFIVs);
-	pFI->lpVtbl->Release(pFI);
-	pFolder->lpVtbl->Release(pFolder);
-	pISD->lpVtbl->Release(pISD);
-	CoUninitialize();
-	// MessageBox(NULL, "Check the TaskBar", "Done", 0);
-	return 0;
+	pFIVs->lpVtbl->Release(pFIVs);	
 }
 
 // -------------------- Get arguments from command line -------------------- function.. just a personal preference for char*/LPSTR instead of the wchar_t*/LPWSTR type provided by "CommandLineToArgvW()"
