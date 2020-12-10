@@ -29,4 +29,4 @@ Notes:
     - https://alexweinberger.com/main/pinning-network-program-taskbar-programmatically-windows-10/
     - Doesn't work anymore either
   - So I ended up using the PE injection method used by syspin.exe from https://www.technosys.net
-	  - Thanks Microsoft for making it a bit more difficult, I learned quite a bit with this little project
+    - Thanks Microsoft for making it a bit more difficult, I learned quite a bit with this little project
