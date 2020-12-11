@@ -208,7 +208,7 @@ void ExecuteVerb(wchar_t* pwcVerb, FolderItem* pFI) {
 	pFIVs->lpVtbl->Release(pFIVs);	
 }
 
-// -------------------- Get arguments from command line -------------------- function.. just a personal preference for char*/LPSTR instead of the wchar_t*/LPWSTR type provided by "CommandLineToArgvW()"
+// -------------------- Get arguments from command line A -------------------- function.. just a personal preference for char*/LPSTR instead of the wchar_t*/LPWSTR type provided by "CommandLineToArgvW()"
 void GetCommandLineArgvA(LPSTR pCommandLine, LPSTR* aArgs) {
 	while (*pCommandLine) {
 		while (*pCommandLine && *pCommandLine == ' ') pCommandLine++;												// Trim white-spaces before the argument
