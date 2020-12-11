@@ -56,7 +56,7 @@ void pttb() {
 // Check that an argument was passed
 	if(!aArgs[1]) {
 		WriteToConsoleA("ERROR: Argument missing\n");
-		WriteToConsoleA("Usage: > tbs PATH\\TO\\THE\\PROGRAM\\OR\\SHORTCUT\\TO\\PIN\\TO\\TASKBAR\n");
+		WriteToConsoleA("Usage: > pttb PATH\\TO\\THE\\PROGRAM\\OR\\SHORTCUT\\TO\\PIN\\TO\\TASKBAR\n");
 		ExitProcess(0xA0); } // ERROR_BAD_ARGUMENTS	
 // Check if 1st argument is a path to a program or shortcut that exists
 	if(access(aArgs[1], 0) < 0 ) {
