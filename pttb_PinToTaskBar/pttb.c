@@ -42,6 +42,7 @@ void WriteToConsoleA(LPSTR lpMsg);																					// "Write to Console A" f
 // -------------------- C Function Prototypes --------------------
 int access(const char* pathname, int how);
 int sprintf(char* buffer, const char* format, ...);
+
 // -------------------- Global Variables --------------------
 HANDLE WINAPI hdConsoleOut;
 
