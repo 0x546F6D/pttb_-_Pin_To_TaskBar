@@ -230,7 +230,7 @@ void WriteToConsoleA(LPSTR lpMsg) {
 // -------------------- "Write Integer as Hex to Console A" -------------------- function instead of printf and <stdio.h>
 // void WriteIntToConsoleA(int num) {
 	// char ahex[19] = {'\0'};
-	// char* phex = (char*)(&ahex + 18);
+	// char* phex = (char*)(&ahex + 17);
 	// while(num != 0) {
 		// int var = num % 16;
 		// if( var < 10 ) *phex = var + 48;
