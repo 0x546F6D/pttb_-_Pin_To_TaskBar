@@ -5,7 +5,7 @@ Pin To TaskBar in C:
 
   - Minimal reverse engineering of syspin.exe from https://www.technosys.net/products/utils/pintotaskbar
   - With only "Pin to taskbar" functionality included, as I didnt need the others
-  - It does Unpin/Re-Pin however to overwrite shortcuts in Taskbar, but your program gets re-pinned in last position
+  - It does Unpin/Re-Pin however to overwrite shortcuts in Taskbar, but the program gets re-pinned in last position
   - It works on my Windows 10 Pro 64bit, build 19041.630, locale en-US
   - Syspin.exe was decompiled using Retargetable Decompiler from https://retdec.com
   - Another helpful reverse engineering project of syspin.exe in C++, which is much more faithful to the source : https://github.com/airwolf2026/Win10Pin2TB
