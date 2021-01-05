@@ -1,7 +1,7 @@
 # pttb - Pin To TaskBar
 
 
-Pin To TaskBar in C:
+Pin To TaskBar for command line:
 
   - Minimal reverse engineering of syspin.exe from https://www.technosys.net/products/utils/pintotaskbar
   - With only "Pin to taskbar" functionality included, as I didnt need the others
