@@ -1,6 +1,6 @@
 // # pttb - Pin To TaskBar
 
-// Pin To TaskBar for command line, in C:
+// Pin To TaskBar for command line:
 //   - Minimal reverse engineering of syspin.exe from https://www.technosys.net/products/utils/pintotaskbar
 //   - With only "Pin to taskbar" functionality included, as I didnt need the others
 //   - It does Unpin/Re-Pin however to overwrite shortcuts in Taskbar, but your program gets re-pinned in last position
