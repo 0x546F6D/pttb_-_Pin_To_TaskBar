@@ -34,4 +34,4 @@ Notes:
 
 To view the source code in your browser with original tabbing (4 white-spaces instead of browsers default 8), add '/?ts=4' to url.  
 Works on Firefox/Chrome based browser, except for edge..  
-https://github.com/0x546F6D/pttb_-_Pin_To_TaskBar/blob/main/pttb_PinToTaskBar/pttb.c/?ts=4
+https://github.com/0x546F6D/pttb_-_Pin_To_TaskBar/blob/main/pttb.c/?ts=4
