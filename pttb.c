@@ -43,7 +43,7 @@ int access(const char* path, int mode);											// https://docs.microsoft.com/
 int sprintf(char* buffer, const char* format, ...);								// https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/sprintf-sprintf-l-swprintf-swprintf-l-swprintf-l?view=msvc-160
 // void* __stdcall GetStdHandle(int32_t nStdHandle);							// https://docs.microsoft.com/en-us/windows/console/getstdhandle
 // void* GetCommandLineA();														// https://docs.microsoft.com/en-us/windows/win32/api/processenv/nf-processenv-getcommandlinea
-// unsigned long strlen(const char *str);												// https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/strlen-wcslen-mbslen-mbslen-l-mbstrlen-mbstrlen-l?view=msvc-160
+// unsigned long strlen(const char *str);										// https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/strlen-wcslen-mbslen-mbslen-l-mbstrlen-mbstrlen-l?view=msvc-160
 // int __stdcall WriteConsoleA(void* hConsoleOutput, const char* lpBuffer,int32_t nNumberOfCharsToWrite, unsigned long* lpNumberOfCharsWritten,void* lpReserved);  // https://docs.microsoft.com/en-us/windows/console/writeconsole
 // unsigned long GetFullPathNameA(char* lpFileName, unsigned long nBufferLength, char* lpBuffer, char** lpFilePart);  // https://docs.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfullpathnamea
 // void* FindWindowA(char* lpClassName, char* lpWindowName);					// https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-findwindowa
