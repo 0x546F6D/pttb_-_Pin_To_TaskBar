@@ -28,8 +28,8 @@
 #include <Shldisp.h>
 #include <stdint.h>
 // #include <stdio.h>
-																				//
-// -------------------- Project Functions Prototype --------------------
+
+// ----------------------- Project Functions Prototype ------------------------ //
 static unsigned long __stdcall PinToTaskBar_func(char* pdata);					// "Pin to tas&kbar" Function to call once injected in "Progman"
 void PinToTaskBar_core (char* pcFolder, char* pcFile, wchar_t* wcpPTTBVerb, wchar_t* wcpUPFTBVerb, IShellDispatch* ISDp);  // Core Function of "PinToTaskBar_func"
 void ExecuteVerb(wchar_t* wcpVerb, FolderItem* FIp);							// Execute Verb if found
@@ -38,12 +38,12 @@ void WriteToConsoleA(char* cpMsg);												// "Write to Console A" function t
 // void WriteIntToConsoleA(int iNum);											// "Write Integer as Hex to Console A" function to save >20KB compared to printf and <stdio.h>
 // void WriteToConsoleW(wchar_t* cpMsg);										// "Write to Console W" function to save >20KB compared to printf and <stdio.h>
 
-// -------------------- Functions Prototype --------------------
+// --------------------------- Functions Prototype ---------------------------- //
 int access(const char* path, int mode);											// https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/access-waccess?view=msvc-160
 int sprintf(char* buffer, const char* format, ...);								// https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/sprintf-sprintf-l-swprintf-swprintf-l-swprintf-l?view=msvc-160
 // void* __stdcall GetStdHandle(int32_t nStdHandle);							// https://docs.microsoft.com/en-us/windows/console/getstdhandle
 // void* GetCommandLineA();														// https://docs.microsoft.com/en-us/windows/win32/api/processenv/nf-processenv-getcommandlinea
-// size_t strlen(const char *str);												// https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/strlen-wcslen-mbslen-mbslen-l-mbstrlen-mbstrlen-l?view=msvc-160
+// unsigned long strlen(const char *str);												// https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/strlen-wcslen-mbslen-mbslen-l-mbstrlen-mbstrlen-l?view=msvc-160
 // int __stdcall WriteConsoleA(void* hConsoleOutput, const char* lpBuffer,int32_t nNumberOfCharsToWrite, unsigned long* lpNumberOfCharsWritten,void* lpReserved);  // https://docs.microsoft.com/en-us/windows/console/writeconsole
 // unsigned long GetFullPathNameA(char* lpFileName, unsigned long nBufferLength, char* lpBuffer, char** lpFilePart);  // https://docs.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfullpathnamea
 // void* FindWindowA(char* lpClassName, char* lpWindowName);					// https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-findwindowa
@@ -71,7 +71,7 @@ int sprintf(char* buffer, const char* format, ...);								// https://docs.micro
 // int VirtualFreeEx(void* hProcess, void* lpAddress, unsigned long dwSize, unsigned long dwFreeType);  // https://docs.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-virtualfreeex
 // void ExitProcess(unsigned int uExitCode);									// https://docs.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-exitprocess
 
-// -------------------- Windows Stuffs --------------------
+// ------------------------------ Windows Stuffs ------------------------------ //
 // VARIANTARG: https://docs.microsoft.com/en-us/previous-versions/windows/embedded/ee487850(v=winembedded.80)
 // IShellDispatch object: https://docs.microsoft.com/en-us/windows/win32/shell/ishelldispatch
 // IShellDispatch.NameSpace method: https://docs.microsoft.com/en-us/windows/win32/shell/ishelldispatch-namespace
@@ -85,10 +85,10 @@ int sprintf(char* buffer, const char* format, ...);								// https://docs.micro
 // FolderItemVerb.Name property: https://docs.microsoft.com/en-us/windows/win32/shell/folderitemverb-name
 // FolderItemVerb.DoIt method: https://docs.microsoft.com/en-us/windows/win32/shell/folderitemverb-doit
 
-// -------------------- Global Variables --------------------
+// ----------------------------- Global Variables ----------------------------- //
 void* __stdcall vp_ConsOut;
 
-// -------------------- entry point function --------------------
+// --------------------------- entry point function --------------------------- //
 void pttb() {
 	vp_ConsOut = GetStdHandle(-11);
 // Get arguments from command line
@@ -160,7 +160,8 @@ void pttb() {
 	ExitProcess(0);
 }
 
-// -------------------- "Pin to tas&kbar" -------------------- Function to call once injected in "Progman"
+// ---------------------------- "Pin to tas&kbar" ----------------------------- //
+// Note: Function to call once injected in "Progman"
 static unsigned long __stdcall PinToTaskBar_func(char* cpdata) {
 // Get directory and Filename from pdata
 	char*	cpDir	= cpdata;
@@ -196,7 +197,7 @@ static unsigned long __stdcall PinToTaskBar_func(char* cpdata) {
 	return 0;
 }
 
-// -------------------- "Pin to tas&kbar" Core --------------------
+// -------------------------- "Pin to tas&kbar" Core -------------------------- //
 void PinToTaskBar_core (char* pcFolder, char* pcFile, wchar_t* wcpPTTBVerb, wchar_t* wcpUPFTBVerb, IShellDispatch* ISDp) {
 // Convert to wchar_t for Variant VT_BSTR type
 	wchar_t	wcaFold[MAX_PATH] = { '\0' };
@@ -222,7 +223,7 @@ void PinToTaskBar_core (char* pcFolder, char* pcFile, wchar_t* wcpPTTBVerb, wcha
 	FOLDp->lpVtbl->Release(FOLDp);
 }
 
-// -------------------- "Execute Verb" --------------------
+// ------------------------------ "Execute Verb" ------------------------------ //
 void ExecuteVerb(wchar_t* wcpVerb, FolderItem* FIp) {
 	int		iVerbLgt = wcsnlen(wcpVerb, MAX_PATH);
 // Create a "FolderItemVerbs" Object of the Verbs corresponding to the file, including "Pin to tas&kbar" or "Unpin from tas&kbar"
@@ -251,8 +252,10 @@ void ExecuteVerb(wchar_t* wcpVerb, FolderItem* FIp) {
 	FIVSp->lpVtbl->Release(FIVSp);	
 }
 
-// -------------------- Get arguments from command line A -------------------- Just a personal preference for char* instead of the wchar_t* provided by "CommandLineToArgvW()"
-// Note: this function works with double quoted arguments containing escaped quotes: "Such as this \"Double Quoted\" Argument with \"Escaped Quotes\""
+// -------------------- Get arguments from command line A --------------------- //
+// Notes:
+//	- Personal preference for char* instead of the wchar_t* provided by "CommandLineToArgvW()"
+//	- Works with double quoted arguments containing escaped quotes: "Such as this \"Double Quoted\" Argument with \"Escaped Quotes\""
 void CommandLineToArgvA(char* cpCmdLine, char** cpaArgs) {
 	char	cEnd;
 	while (*cpCmdLine) {
@@ -265,12 +268,14 @@ void CommandLineToArgvA(char* cpCmdLine, char** cpaArgs) {
 		cpaArgs++; }
 }
 
-// -------------------- "Write to Console A" -------------------- Saves >20KB compared to printf and <stdio.h>
+// --------------------------- "Write to Console A" --------------------------- //
+// Note: Saves >20KB compared to printf and <stdio.h>
 void WriteToConsoleA(char* cpMsg) {
 	WriteConsoleA(vp_ConsOut, cpMsg, strlen(cpMsg), NULL, NULL);
 }
 
-// -------------------- "Write Integer as Hex to Console A" -------------------- Saves >20KB compared to printf and <stdio.h>
+// ------------------- "Write Integer as Hex to Console A" -------------------- //
+// Note: Saves >20KB compared to printf and <stdio.h>
 // void WriteIntToConsoleA(int iNum) {
 	// char caHex[19] = {'\0'};
 	// char* cpHex = &caHex[17];
@@ -285,7 +290,8 @@ void WriteToConsoleA(char* cpMsg) {
 	// WriteConsoleA(vp_ConsOut, cpHex, strlen(cpHex), NULL, NULL);
 // }
 
-// -------------------- "Write to Console W" -------------------- Saves >20KB compared to printf and <stdio.h>
+// --------------------------- "Write to Console W" --------------------------- //
+// Note: Saves >20KB compared to printf and <stdio.h>
 // void WriteToConsoleW(wchar_t* cpMsg) {
 	// WriteConsoleW(vp_ConsOut, cpMsg, wcslen(cpMsg), NULL, NULL);
 // }
