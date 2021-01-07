@@ -31,7 +31,7 @@
 
 // ----------------------- Project Functions Prototype ------------------------ //
 static unsigned long __stdcall PinToTaskBar_func(char* pdata);					// "Pin to tas&kbar" Function to call once injected in "Progman"
-void PinToTaskBar_core (char* pcFolder, char* pcFile, wchar_t* wcpPTTBVerb, wchar_t* wcpUPFTBVerb, IShellDispatch* ISDp);  // Core Function of "PinToTaskBar_func"
+void PinToTaskBar_core(char* pcFolder, char* pcFile, wchar_t* wcpPTTBVerb, wchar_t* wcpUPFTBVerb, IShellDispatch* ISDp);  // Core Function of "PinToTaskBar_func"
 void ExecuteVerb(wchar_t* wcpVerb, FolderItem* FIp);							// Execute Verb if found
 void CommandLineToArgvA(char* cpCmdLine, char** cpaArgs);						// Get arguments from command line.. just a personal preference for char* instead of the wchar_t* type provided by "CommandLineToArgvW()"
 void WriteToConsoleA(char* cpMsg);												// "Write to Console A" function to save >20KB compared to printf and <stdio.h>
