@@ -1,28 +1,6 @@
 // # pttb - Pin To TaskBar
-
-// Pin To TaskBar for command line:
-//   - Minimal reverse engineering of syspin.exe from https://www.technosys.net/products/utils/pintotaskbar
-//   - With only "Pin to taskbar" functionality included
-//   - However, in order to overwrite shorcuts in TaskBar, pttb does Unpin & Re-Pin them, but the programs gets re-pinned in last position
-//   - Tested on Windows 10 Pro 64bit - Version 2004 / build 19041.685 / locale en-US
-//   - Syspin.exe was decompiled using Retargetable Decompiler from https://retdec.com
-//   - Another helpful reverse engineering project of syspin.exe in C++, which is much more faithful to the source : https://github.com/airwolf2026/Win10Pin2TB
-
-// Compiled with MSYS2/MinGW-w64:
-//	$ gcc -o pttb pttb.c -Lmingw64/x86_64-w64-mingw32/lib -lole32 -loleaut32 -luuid -s -O3 -Wl,--gc-sections -nostartfiles --entry=pttb
-
 // Usage:
-//	> pttb PATH\TO\THE\PROGRAM\OR\SHORTCUT\TO\PIN\TO\TASKBAR
-
-// Notes:
-//   - 1st tried the registry method described here:
-//     - https://stackoverflow.com/questions/31720595/pin-program-to-taskbar-using-ps-in-windows-10
-//     - Doesn't work anymore
-//   - Then tried the PEB method described here:
-//     - https://alexweinberger.com/main/pinning-network-program-taskbar-programmatically-windows-10/
-//     - Doesn't work anymore either
-//   - So pttb ended up being developed with the PE injection method used by syspin.exe from https://www.technosys.net
-//     - Thanks Microsoft for making it a bit more difficult, I learned quite a bit with this little project
+//	> pttb Path\to\.exe\or\.lnk\to\PinToTaskbar
 
 // #include <windows.h>
 #include <Shldisp.h>
@@ -37,53 +15,9 @@ void CommandLineToArgvA(char* cmdLine_cp, char** args_cpa);						// Get argument
 void WriteToConsoleA(char* msg_cp);												// "Write to Console A" function to save >20KB compared to printf and <stdio.h>
 // void WriteIntToConsoleA(int num_i);											// "Write Integer as Hex to Console A" function to save >20KB compared to printf and <stdio.h>
 // void WriteToConsoleW(wchar_t* msg_cp);										// "Write to Console W" function to save >20KB compared to printf and <stdio.h>
-
-// --------------------------- Functions Prototype ---------------------------- //
+// -------------------------- C Functions Prototype --------------------------- //
 int access(const char* path, int mode);											// https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/access-waccess?view=msvc-160
 int sprintf(char* buffer, const char* format, ...);								// https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/sprintf-sprintf-l-swprintf-swprintf-l-swprintf-l?view=msvc-160
-// void* __stdcall GetStdHandle(int nStdHandle);							// https://docs.microsoft.com/en-us/windows/console/getstdhandle
-// void* GetCommandLineA();														// https://docs.microsoft.com/en-us/windows/win32/api/processenv/nf-processenv-getcommandlinea
-// unsigned long strlen(const char *str);										// https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/strlen-wcslen-mbslen-mbslen-l-mbstrlen-mbstrlen-l?view=msvc-160
-// int __stdcall WriteConsoleA(void* hConsoleOutput, const char* lpBuffer,int nNumberOfCharsToWrite, unsigned long* lpNumberOfCharsWritten,void* lpReserved);  // https://docs.microsoft.com/en-us/windows/console/writeconsole
-// unsigned long GetFullPathNameA(char* lpFileName, unsigned long nBufferLength, char* lpBuffer, char** lpFilePart);  // https://docs.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfullpathnamea
-// void* FindWindowA(char* lpClassName, char* lpWindowName);					// https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-findwindowa
-// unsigned long GetWindowThreadProcessId( void* hWnd, unsigned long* lpdwProcessId);  // https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getwindowthreadprocessid
-// void* OpenProcess(unsigned long dwDesiredAccess, int  bInheritHandle, unsigned long dwProcessId);  // https://docs.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-openprocess
-// void* GetModuleHandleA(char* lpModuleName);									// https://docs.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-getmodulehandlea
-// void* VirtualAlloc(void* lpAddress, unsigned long dwSize, unsigned long flAllocationType, unsigned long flProtect);  // https://docs.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-virtualalloc
-// void* memcpy(void* dest, const void* src, unsigned long count);				// https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/memcpy-wmemcpy?view=msvc-160
-// void* VirtualAllocEx(void* hProcess, void* lpAddress, unsigned long dwSize, unsigned long flAllocationType, unsigned long flProtect);  // https://docs.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-virtualallocex
-// int WriteProcessMemory(void*  hProcess, void* lpBaseAddress, void* lpBuffer, unsigned long nSize, unsigned long* lpNumberOfBytesWritten);  // https://docs.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-writeprocessmemory
-// void* CreateRemoteThread(void* hProcess, LPSECURITY_ATTRIBUTES lpThreadAttributes, unsigned long dwStackSize, LPTHREAD_START_ROUTINE startRoutine_lptsr, void* lpParameter, unsigned long dwCreationFlags, unsigned long* lpThreadId);  \\ https://docs.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-createremotethread
-// void* LoadLibraryW(wchar_t* lpLibFileName);									// https://docs.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-loadlibraryw
-// void* GetModuleHandleW(wchar_t* lpModuleName);								// https://docs.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-getmodulehandlew
-// int LoadStringW(void* hInstance, unsigned int uID, wchar_t* lpBuffer, int cchBufferMax);  // https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-loadstringw
-// int FreeLibrary(void* hLibModule);											// https://docs.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-freelibrary
-// long CoInitialize(void* pvReserved);											// https://docs.microsoft.com/en-us/windows/win32/api/objbase/nf-objbase-coinitialize
-// long CoCreateInstance(REFCLSID  rclsid, LPUNKNOWN pUnkOuter, unsigned long dwClsContext, REFIID riid, void** ppv);  // https://docs.microsoft.com/en-us/windows/win32/api/combaseapi/nf-combaseapi-cocreateinstance
-// void VariantInit(VARIANTARG *pvarg);											// https://docs.microsoft.com/en-us/windows/win32/api/oleauto/nf-oleauto-variantinit
-// unsigned long wcsnlen(const wchar_t* str, unsigned long numberOfElements);	// https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/strnlen-strnlen-s?view=msvc-160
-// void CoUninitialize();														// https://docs.microsoft.com/en-us/windows/win32/api/combaseapi/nf-combaseapi-couninitialize
-// unsigned long WaitForSingleObject(void* hHandle, unsigned long dwMilliseconds);  // https://docs.microsoft.com/en-us/windows/win32/api/synchapi/nf-synchapi-waitforsingleobject
-// int TerminateThread(void* hThread, unsigned long dwExitCode);				// https://docs.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-terminatethread
-// int CloseHandle(void* hObject);												// https://docs.microsoft.com/en-us/windows/win32/api/handleapi/nf-handleapi-closehandle
-// int VirtualFree(void* lpAddress, unsigned long dwSize, unsigned long dwFreeType);  // https://docs.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-virtualfree
-// int VirtualFreeEx(void* hProcess, void* lpAddress, unsigned long dwSize, unsigned long dwFreeType);  // https://docs.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-virtualfreeex
-// void ExitProcess(unsigned int uExitCode);									// https://docs.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-exitprocess
-
-// ------------------------------ Windows Stuffs ------------------------------ //
-// VARIANTARG: https://docs.microsoft.com/en-us/previous-versions/windows/embedded/ee487850(v=winembedded.80)
-// IShellDispatch object: https://docs.microsoft.com/en-us/windows/win32/shell/ishelldispatch
-// IShellDispatch.NameSpace method: https://docs.microsoft.com/en-us/windows/win32/shell/ishelldispatch-namespace
-// Folder object: https://docs.microsoft.com/en-us/windows/win32/shell/folder
-// Folder.ParseName method: https://docs.microsoft.com/en-us/windows/win32/shell/folder-parsename
-// FolderItem object: https://docs.microsoft.com/en-us/windows/win32/shell/folderitem
-// FolderItemVerbs object: https://docs.microsoft.com/en-us/windows/win32/shell/folderitemverbs
-// FolderItemVerbs.Count property: https://docs.microsoft.com/en-us/windows/win32/shell/folderitemverbs-count
-// FolderItemVerbs.Item method: https://docs.microsoft.com/en-us/windows/win32/shell/folderitemverbs-item
-// FolderItemVerb object: https://docs.microsoft.com/en-us/windows/win32/shell/folderitemverb
-// FolderItemVerb.Name property: https://docs.microsoft.com/en-us/windows/win32/shell/folderitemverb-name
-// FolderItemVerb.DoIt method: https://docs.microsoft.com/en-us/windows/win32/shell/folderitemverb-doit
 
 // ----------------------------- Global Variables ----------------------------- //
 void* __stdcall consOut_vp;
@@ -91,6 +25,7 @@ void* __stdcall consOut_vp;
 // --------------------------- entry point function --------------------------- //
 void pttb() {
 	consOut_vp = GetStdHandle(-11);
+
 // Get arguments from command line
 	const int nbArgs_i = 1;														// number of expected arguments
 	char* args_cpa[nbArgs_i+1];													// 1st "argument" isnt really one: it's this program path
@@ -172,8 +107,8 @@ static unsigned long __stdcall PinToTaskBar_func(char* data_cp) {
 	*file_cp = 0;
 	file_cp += 1;
 // Get "Pin to tas&kbar" and "Unpin from tas&kbar" Verbs in Windows locale
-	wchar_t* pttbVerb_wcp = L"Pin to tas&kbar";
-	wchar_t* upftbVerb_wcp = L"Unpin from tas&kbar";
+	wchar_t pttbVerb_wcp[MAX_PATH] = L"Pin to tas&kbar";
+	wchar_t upftbVerb_wcp[MAX_PATH] = L"Unpin from tas&kbar";
 	void* shell32_vp = LoadLibraryW(L"shell32.dll");
 	LoadStringW(GetModuleHandleW(L"shell32.dll"), 5386, pttbVerb_wcp, MAX_PATH); // 5386: "Pin to tas&kbar" in en-us locale versions of Windows
 	LoadStringW(GetModuleHandleW(L"shell32.dll"), 5387, upftbVerb_wcp, MAX_PATH); // 5387: "Unpin from tas&kbar" in en-us locale versions of Windows
@@ -305,3 +240,76 @@ void WriteToConsoleA(char* msg_cp) {
 // void WriteToConsoleW(wchar_t* msg_cp) {
 	// WriteConsoleW(consOut_vp, msg_cp, wcslen(msg_cp), NULL, NULL);
 // }
+
+// INFO
+// Pin To TaskBar for command line:
+//   - Minimal reverse engineering of syspin.exe from https://www.technosys.net/products/utils/pintotaskbar
+//   - With only "Pin to taskbar" functionality included
+//   - However, in order to overwrite shorcuts in TaskBar, pttb does Unpin & Re-Pin them, but the programs gets re-pinned in last position
+//   - Tested on Windows 10 Pro 64bit - Version 2004 / build 19041.685 / locale en-US
+//   - Syspin.exe was decompiled using Retargetable Decompiler from https://retdec.com
+//   - Another helpful reverse engineering project of syspin.exe in C++, which is much more faithful to the source : https://github.com/airwolf2026/Win10Pin2TB
+
+// Compiled with MSYS2/MinGW-w64:
+//	$ gcc -o pttb pttb.c -Lmingw64/x86_64-w64-mingw32/lib -lole32 -loleaut32 -luuid -s -O3 -Wl,--gc-sections -nostartfiles --entry=pttb
+
+// Usage:
+//	> pttb PATH\TO\THE\PROGRAM\OR\SHORTCUT\TO\PIN\TO\TASKBAR
+
+// Notes:
+//   - 1st tried the registry method described here:
+//     - https://stackoverflow.com/questions/31720595/pin-program-to-taskbar-using-ps-in-windows-10
+//     - Doesn't work anymore
+//   - Then tried the PEB method described here:
+//     - https://alexweinberger.com/main/pinning-network-program-taskbar-programmatically-windows-10/
+//     - Doesn't work anymore either
+//   - So pttb ended up being developed with the PE injection method used by syspin.exe from https://www.technosys.net
+//     - Thanks Microsoft for making it a bit more difficult, I learned quite a bit with this little project
+
+// --------------------------- Functions Prototype ---------------------------- //
+// int access(const char* path, int mode);											// https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/access-waccess?view=msvc-160
+// int sprintf(char* buffer, const char* format, ...);								// https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/sprintf-sprintf-l-swprintf-swprintf-l-swprintf-l?view=msvc-160
+// void* __stdcall GetStdHandle(int nStdHandle);							// https://docs.microsoft.com/en-us/windows/console/getstdhandle
+// void* GetCommandLineA();														// https://docs.microsoft.com/en-us/windows/win32/api/processenv/nf-processenv-getcommandlinea
+// unsigned long strlen(const char *str);										// https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/strlen-wcslen-mbslen-mbslen-l-mbstrlen-mbstrlen-l?view=msvc-160
+// int __stdcall WriteConsoleA(void* hConsoleOutput, const char* lpBuffer,int nNumberOfCharsToWrite, unsigned long* lpNumberOfCharsWritten,void* lpReserved);  // https://docs.microsoft.com/en-us/windows/console/writeconsole
+// unsigned long GetFullPathNameA(char* lpFileName, unsigned long nBufferLength, char* lpBuffer, char** lpFilePart);  // https://docs.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfullpathnamea
+// void* FindWindowA(char* lpClassName, char* lpWindowName);					// https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-findwindowa
+// unsigned long GetWindowThreadProcessId( void* hWnd, unsigned long* lpdwProcessId);  // https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getwindowthreadprocessid
+// void* OpenProcess(unsigned long dwDesiredAccess, int  bInheritHandle, unsigned long dwProcessId);  // https://docs.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-openprocess
+// void* GetModuleHandleA(char* lpModuleName);									// https://docs.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-getmodulehandlea
+// void* VirtualAlloc(void* lpAddress, unsigned long dwSize, unsigned long flAllocationType, unsigned long flProtect);  // https://docs.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-virtualalloc
+// void* memcpy(void* dest, const void* src, unsigned long count);				// https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/memcpy-wmemcpy?view=msvc-160
+// void* VirtualAllocEx(void* hProcess, void* lpAddress, unsigned long dwSize, unsigned long flAllocationType, unsigned long flProtect);  // https://docs.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-virtualallocex
+// int WriteProcessMemory(void*  hProcess, void* lpBaseAddress, void* lpBuffer, unsigned long nSize, unsigned long* lpNumberOfBytesWritten);  // https://docs.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-writeprocessmemory
+// void* CreateRemoteThread(void* hProcess, LPSECURITY_ATTRIBUTES lpThreadAttributes, unsigned long dwStackSize, LPTHREAD_START_ROUTINE startRoutine_lptsr, void* lpParameter, unsigned long dwCreationFlags, unsigned long* lpThreadId);  \\ https://docs.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-createremotethread
+// void* LoadLibraryW(wchar_t* lpLibFileName);									// https://docs.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-loadlibraryw
+// void* GetModuleHandleW(wchar_t* lpModuleName);								// https://docs.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-getmodulehandlew
+// int LoadStringW(void* hInstance, unsigned int uID, wchar_t* lpBuffer, int cchBufferMax);  // https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-loadstringw
+// int FreeLibrary(void* hLibModule);											// https://docs.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-freelibrary
+// long CoInitialize(void* pvReserved);											// https://docs.microsoft.com/en-us/windows/win32/api/objbase/nf-objbase-coinitialize
+// long CoCreateInstance(REFCLSID  rclsid, LPUNKNOWN pUnkOuter, unsigned long dwClsContext, REFIID riid, void** ppv);  // https://docs.microsoft.com/en-us/windows/win32/api/combaseapi/nf-combaseapi-cocreateinstance
+// void VariantInit(VARIANTARG *pvarg);											// https://docs.microsoft.com/en-us/windows/win32/api/oleauto/nf-oleauto-variantinit
+// unsigned long wcsnlen(const wchar_t* str, unsigned long numberOfElements);	// https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/strnlen-strnlen-s?view=msvc-160
+// void CoUninitialize();														// https://docs.microsoft.com/en-us/windows/win32/api/combaseapi/nf-combaseapi-couninitialize
+// unsigned long WaitForSingleObject(void* hHandle, unsigned long dwMilliseconds);  // https://docs.microsoft.com/en-us/windows/win32/api/synchapi/nf-synchapi-waitforsingleobject
+// int TerminateThread(void* hThread, unsigned long dwExitCode);				// https://docs.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-terminatethread
+// int CloseHandle(void* hObject);												// https://docs.microsoft.com/en-us/windows/win32/api/handleapi/nf-handleapi-closehandle
+// int VirtualFree(void* lpAddress, unsigned long dwSize, unsigned long dwFreeType);  // https://docs.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-virtualfree
+// int VirtualFreeEx(void* hProcess, void* lpAddress, unsigned long dwSize, unsigned long dwFreeType);  // https://docs.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-virtualfreeex
+// void ExitProcess(unsigned int uExitCode);									// https://docs.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-exitprocess
+
+// ------------------------------ Windows Stuffs ------------------------------ //
+// VARIANTARG: https://docs.microsoft.com/en-us/previous-versions/windows/embedded/ee487850(v=winembedded.80)
+// IShellDispatch object: https://docs.microsoft.com/en-us/windows/win32/shell/ishelldispatch
+// IShellDispatch.NameSpace method: https://docs.microsoft.com/en-us/windows/win32/shell/ishelldispatch-namespace
+// Folder object: https://docs.microsoft.com/en-us/windows/win32/shell/folder
+// Folder.ParseName method: https://docs.microsoft.com/en-us/windows/win32/shell/folder-parsename
+// FolderItem object: https://docs.microsoft.com/en-us/windows/win32/shell/folderitem
+// FolderItemVerbs object: https://docs.microsoft.com/en-us/windows/win32/shell/folderitemverbs
+// FolderItemVerbs.Count property: https://docs.microsoft.com/en-us/windows/win32/shell/folderitemverbs-count
+// FolderItemVerbs.Item method: https://docs.microsoft.com/en-us/windows/win32/shell/folderitemverbs-item
+// FolderItemVerb object: https://docs.microsoft.com/en-us/windows/win32/shell/folderitemverb
+// FolderItemVerb.Name property: https://docs.microsoft.com/en-us/windows/win32/shell/folderitemverb-name
+// FolderItemVerb.DoIt method: https://docs.microsoft.com/en-us/windows/win32/shell/folderitemverb-doit
+
