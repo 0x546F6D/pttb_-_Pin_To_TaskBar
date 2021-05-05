@@ -1,19 +1,22 @@
 // # pttb - Pin To TaskBar
 // Usage:
 //	> pttb Path\to\.exe\or\.lnk\to\PinToTaskbar
+//	> pttb -u Path\to\.exe\or\.lnk\to\UnPinFromTaskBar
 
 // #include <windows.h>
 #include <Shldisp.h>
 #include <stdint.h>
 // #include <stdio.h>
-
+  
+// --------------------------- Variables Definition --------------------------- //
+#define NB_ARG 2
 // ----------------------- Project Functions Prototype ------------------------ //
 static unsigned long __stdcall PinToTaskBar_func(char* pdata);					// "Pin to tas&kbar" Function to call once injected in "Progman"
 void PinToTaskBar_core(char* dir_cp, char* file_cp, wchar_t* pttbVerb_wcp, wchar_t* upftbVerb_wcp, IShellDispatch* ISD_p);  // Core Function of "PinToTaskBar_func"
-void ExecuteVerb(wchar_t* verb_wcp, FolderItem* folderItem_p);							// Execute Verb if found
+void ExecuteVerb(wchar_t* verb_wcp, FolderItem* folderItem_p);					// Execute Verb if found
 void CommandLineToArgvA(char* cmdLine_cp, char** args_cpa);						// Get arguments from command line.. just a personal preference for char* instead of the wchar_t* type provided by "CommandLineToArgvW()"
 void WriteToConsoleA(char* msg_cp);												// "Write to Console A" function to save >20KB compared to printf and <stdio.h>
-// void WriteIntToConsoleA(int num_i);											// "Write Integer as Hex to Console A" function to save >20KB compared to printf and <stdio.h>
+// void WriteHexToConsoleA(int num_i);											// "Write Integer as Hex to Console A" function to save >20KB compared to printf and <stdio.h>
 // void WriteToConsoleW(wchar_t* msg_cp);										// "Write to Console W" function to save >20KB compared to printf and <stdio.h>
 // -------------------------- C Functions Prototype --------------------------- //
 int access(const char* path, int mode);											// https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/access-waccess?view=msvc-160
@@ -25,18 +28,22 @@ void* __stdcall consOut_vp;
 // --------------------------- entry point function --------------------------- //
 void pttb() {
 	consOut_vp = GetStdHandle(-11);
-
 // Get arguments from command line
-	const int nbArgs_i = 1;														// number of expected arguments
-	char* args_cpa[nbArgs_i+1];													// 1st "argument" isnt really one: it's this program path
+	char* args_cpa[NB_ARG+1] = {NULL};													// 1st "argument" isnt really one: it's this program path
 	char argPath_ca[MAX_PATH];													// Full path to exe or shortcut to Pin to TaskBar
 	char* cmdLine_cp = GetCommandLineA();
 	CommandLineToArgvA(cmdLine_cp, args_cpa);									// Get arguments from command line
 // Check that an argument was passed
 	if(!args_cpa[1]) {
 		WriteToConsoleA("\nERROR_BAD_ARGUMENTS: Arguments missing\n");
-		WriteToConsoleA("Usage: > pttb Path\\to\\.exe\\or\\.lnk\\to Pin to TaskBar\n");
+		WriteToConsoleA("To Pin / Force Re-Pin: > pttb Path\\to\\.exe\\or\\.lnk\\to\\PinToTaskBar\n");
+		WriteToConsoleA("To UnPin Only:         > pttb -u Path\\to\\.exe\\or\\.lnk\\to\\UnPinFromTaskBar\n");
 		ExitProcess(0xA0); }													// 0xA0: ERROR_BAD_ARGUMENTS	
+// Check for Unpin Only argument
+	char justUnPin = 0;
+	if(args_cpa[NB_ARG] && (*(short*)args_cpa[1] == 0x752D || *(short*)args_cpa[1] == 0x552D)) { // 0x752D: u-, 0x552D: U-
+		justUnPin = 1;
+		args_cpa[1] = args_cpa[2]; }
 // Check if 1st argument is a path to a program or shortcut that exists, and get GetFullPathName if it does
 	if(access(args_cpa[1], 0) < 0 ) {
 		WriteToConsoleA("\nERROR_FILE_NOT_FOUND: \""); WriteToConsoleA(args_cpa[1]); WriteToConsoleA("\"\n");
@@ -51,13 +58,13 @@ void pttb() {
 	long long moduleAdr_ll = (long long)module_vp;
 	long long imgHeadAdr_ll = moduleAdr_ll + *(int*)(moduleAdr_ll + 0x3C);		// 0x3C: IMAGE_DOS_HEADER->e_lfanew (offset to IMAGE_NT_HEADERS)
 	unsigned long imgSize_ul = *(unsigned long*)(imgHeadAdr_ll + 0x50);			// 0x50: IMAGE_NT_HEADERS->IMAGE_OPTIONAL_HEADER->SizeOfImage (Size of current process in memory)
-	// WriteIntToConsoleA(imgSize_ul); WriteToConsoleA("\n");
+	// WriteHexToConsoleA(imgSize_ul); WriteToConsoleA("\n");
 // Reserve a local region of memory equal to "imgSize_ul" and make a copy of itself into it
 	void* locVirtAlloc_vp = VirtualAlloc(NULL, imgSize_ul, 0x3000, 0x40);		// 0x3000: MEM_COMMIT|MEM_RESERVE; 0x40: PAGE_EXECUTE_READWRITE
 	long long locVirtAllocAdr_ll = (long long)locVirtAlloc_vp;
 	memcpy(locVirtAlloc_vp, module_vp, imgSize_ul);
-// Reserve a region of memory equal to "imgSize_ul + MAX_PATH" in the "Progman" process
-	void* remVirtAlloc_vp = VirtualAllocEx(process_vp, NULL, imgSize_ul+MAX_PATH, 0x3000, 0x40);
+// Reserve a region of memory equal to "imgSize_ul + MAX_PATH + 1" in the "Progman" process
+	void* remVirtAlloc_vp = VirtualAllocEx(process_vp, NULL, imgSize_ul+MAX_PATH+1, 0x3000, 0x40);
 	long long remVirtAllocAdr_ll = (long long)remVirtAlloc_vp;
 // Check if any Virtual Address in the current process need to be relocated 
 	long long relocTblAdr_ll = (*(int*)(imgHeadAdr_ll + 180) != 0) ? *(int*)(imgHeadAdr_ll + 176) : 0; // 176/180: IMAGE_NT_HEADERS->IMAGE_OPTIONAL_HEADER->IMAGE_DATA_DIRECTORY->Base relocation table address/size
@@ -81,6 +88,7 @@ void pttb() {
 	WriteProcessMemory(process_vp, remVirtAlloc_vp, locVirtAlloc_vp, imgSize_ul, NULL);
 	void* cmdBase_vp = (void*)(remVirtAllocAdr_ll + imgSize_ul);
 	WriteProcessMemory(process_vp, cmdBase_vp, argPath_ca, MAX_PATH, NULL);	// Copy the path to the file to pin to taskbar, into the extra memory of size "MAX_PATH"
+	WriteProcessMemory(process_vp, cmdBase_vp+MAX_PATH, &justUnPin, 1, NULL);	// Copy the path to the file to pin to taskbar, into the extra memory of size "MAX_PATH"
 // Run the "PinToTaskBar_func" in the "Progman" process, with the path to the file to pin to taskbar as a parameter
 	LPTHREAD_START_ROUTINE startRoutine_lptsr = (LPTHREAD_START_ROUTINE)(relocOffset_ll + PinToTaskBar_func);
 	void* thread_vp = CreateRemoteThread(process_vp, NULL, 0, startRoutine_lptsr, cmdBase_vp, 0, NULL);
@@ -98,6 +106,7 @@ void pttb() {
 // ---------------------------- "Pin to tas&kbar" ----------------------------- //
 // Note: Function to call once injected in "Progman"
 static unsigned long __stdcall PinToTaskBar_func(char* data_cp) {
+	char justUnPin = *(data_cp+MAX_PATH);
 // Get directory and Filename from pdata
 	char* dir_cp = data_cp;
 	char* file_cp = NULL;
@@ -107,23 +116,28 @@ static unsigned long __stdcall PinToTaskBar_func(char* data_cp) {
 	*file_cp = 0;
 	file_cp += 1;
 // Get "Pin to tas&kbar" and "Unpin from tas&kbar" Verbs in Windows locale
-	wchar_t pttbVerb_wcp[MAX_PATH] = L"Pin to tas&kbar";
-	wchar_t upftbVerb_wcp[MAX_PATH] = L"Unpin from tas&kbar";
+	wchar_t pttbVerb_wca[MAX_PATH] = {'\0'};
+	wchar_t* pttbVerb_wcp = NULL;
+	wchar_t upftbVerb_wca[MAX_PATH] = {'\0'};
+	wchar_t* upftbVerb_wcp = upftbVerb_wca;
 	void* shell32_vp = LoadLibraryW(L"shell32.dll");
-	LoadStringW(GetModuleHandleW(L"shell32.dll"), 5386, pttbVerb_wcp, MAX_PATH); // 5386: "Pin to tas&kbar" in en-us locale versions of Windows
-	LoadStringW(GetModuleHandleW(L"shell32.dll"), 5387, upftbVerb_wcp, MAX_PATH); // 5387: "Unpin from tas&kbar" in en-us locale versions of Windows
+	if (!justUnPin) {
+		LoadStringW(GetModuleHandleW(L"shell32.dll"), 5386, pttbVerb_wca, MAX_PATH); // 5386: "Pin to tas&kbar" in en-us locale versions of Windows
+		pttbVerb_wcp = pttbVerb_wca; }
+	LoadStringW(GetModuleHandleW(L"shell32.dll"), 5387, upftbVerb_wca, MAX_PATH);	// 5387: "Unpin from tas&kbar" in en-us locale versions of Windows
 	FreeLibrary(shell32_vp);
 // Create COM Objects
 	CoInitialize(NULL);
 	IShellDispatch* ISD_p;
 	CoCreateInstance(&CLSID_Shell, NULL, 0x1, &IID_IShellDispatch, (void**)&ISD_p);	// 0x1: CLSCTX_INPROC_SERVER
-// Check if Shorcut is already pinned, and if so: unpin it directly from %AppData%\Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar\shorcut.lnk, because Windows föks up when Unpinning+Pinning shorcuts with same path/name.lnk, but whose target/arguments have been modified..
-	char tbStore_ca[MAX_PATH] = { '\0' };
+// Check if Shorcut is already pinned, and if so: unpin it directly from %AppData%\Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar\shorcut.lnk, because Windows föks up when Unpinning shorcuts whose target/arguments have been modified after getting pinned..
+	char tbStore_ca[MAX_PATH] = {'\0'};
 	sprintf(tbStore_ca, "%s\\Microsoft\\Internet Explorer\\Quick Launch\\User Pinned\\TaskBar", getenv("AppData"));
-	char tbShortCut_ca[MAX_PATH] = { '\0' };
+	char tbShortCut_ca[MAX_PATH] = {'\0'};
 	sprintf(tbShortCut_ca, "%s\\%s", tbStore_ca, file_cp);
-	if (access(tbShortCut_ca, 0) == 0) PinToTaskBar_core(tbStore_ca, file_cp, NULL, upftbVerb_wcp, ISD_p);
-// Unpin Prog from taskbar if pinned and (Re-)Pin Prog/ShorCut
+	if (access(tbShortCut_ca, 0) == 0) {
+		PinToTaskBar_core(tbStore_ca, file_cp, NULL, upftbVerb_wcp, ISD_p);
+		upftbVerb_wcp = NULL; }
 	PinToTaskBar_core(dir_cp, file_cp, pttbVerb_wcp, upftbVerb_wcp, ISD_p);
 // Clean Up
 	ISD_p->lpVtbl->Release(ISD_p);
@@ -135,12 +149,12 @@ static unsigned long __stdcall PinToTaskBar_func(char* data_cp) {
 // -------------------------- "Pin to tas&kbar" Core -------------------------- //
 void PinToTaskBar_core (char* dir_cp, char* file_cp, wchar_t* pttbVerb_wcp, wchar_t* upftbVerb_wcp, IShellDispatch* ISD_p) {
 // Convert to wchar_t for Variant VT_BSTR type
-	wchar_t	dir_wca[MAX_PATH] = { '\0' };
+	wchar_t	dir_wca[MAX_PATH] = {'\0'};
 	mbstowcs(dir_wca, dir_cp, MAX_PATH);
-	wchar_t	file_wca[MAX_PATH] = { '\0' };
+	wchar_t	file_wca[MAX_PATH] = {'\0'};
 	mbstowcs(file_wca, file_cp, MAX_PATH);
 // Create a "Folder" Object of the directory containing the file to Pin/Unpin
-	Folder	*folder_p;
+	Folder *folder_p;
 	VARIANTARG tmpVar_va;
 	VariantInit(&tmpVar_va);
 	tmpVar_va.vt = VT_BSTR;
@@ -150,9 +164,11 @@ void PinToTaskBar_core (char* dir_cp, char* file_cp, wchar_t* pttbVerb_wcp, wcha
 	FolderItem* folderItem_p;
 	folder_p->lpVtbl->ParseName(folder_p, file_wca, &folderItem_p);
 // Initialise the list of Verbs and search for "Unpin from tas&kbar". If found: execute it
-	if(upftbVerb_wcp) ExecuteVerb(upftbVerb_wcp, folderItem_p);
+	if(upftbVerb_wcp) {
+		ExecuteVerb(upftbVerb_wcp, folderItem_p); }
 // Initialise the list of Verbs and search for "Pin to tas&kbar". If found: execute it
-	if(pttbVerb_wcp) ExecuteVerb(pttbVerb_wcp, folderItem_p);
+	if(pttbVerb_wcp) {
+		ExecuteVerb(pttbVerb_wcp, folderItem_p); }
 // Clean Up
 	folderItem_p->lpVtbl->Release(folderItem_p);
 	folder_p->lpVtbl->Release(folder_p);
@@ -221,7 +237,7 @@ void WriteToConsoleA(char* msg_cp) {
 
 // ------------------- "Write Integer as Hex to Console A" -------------------- //
 // Note: Saves >20KB compared to printf and <stdio.h>
-// void WriteIntToConsoleA(int num_i) {
+// void WriteHexToConsoleA(int num_i) {
 	// char hex_ca[19] = {'\0'};
 	// char* hex_cp = &hex_ca[17];
 	// while(num_i != 0) {
@@ -241,20 +257,23 @@ void WriteToConsoleA(char* msg_cp) {
 	// WriteConsoleW(consOut_vp, msg_cp, wcslen(msg_cp), NULL, NULL);
 // }
 
-// INFO
+// ---------------------------------------------------------------------------- //
+// ----------------------------------- INFO ----------------------------------- //
+// ---------------------------------------------------------------------------- //
 // Pin To TaskBar for command line:
 //   - Minimal reverse engineering of syspin.exe from https://www.technosys.net/products/utils/pintotaskbar
-//   - With only "Pin to taskbar" functionality included
-//   - However, in order to overwrite shorcuts in TaskBar, pttb does Unpin & Re-Pin them, but the programs gets re-pinned in last position
-//   - Tested on Windows 10 Pro 64bit - Version 2004 / build 19041.685 / locale en-US
+//   - With only "Pin to taskbar" and "Unpin from taskbar" functionalities included
+//   - By default, pttb force Re-Pin any .exe/.lnk that is already pinned, but as a result: the programs gets re-pinned in last position
+//   - Tested on Windows 10 Pro 64bit - Version 20H2 / build 19042.964 / locale en-US
 //   - Syspin.exe was decompiled using Retargetable Decompiler from https://retdec.com
-//   - Another helpful reverse engineering project of syspin.exe in C++, which is much more faithful to the source : https://github.com/airwolf2026/Win10Pin2TB
+//   - Another helpful reverse engineering project of syspin.exe in C++ (much more faithful to the source) : https://github.com/airwolf2026/Win10Pin2TB
 
 // Compiled with MSYS2/MinGW-w64:
 //	$ gcc -o pttb pttb.c -Lmingw64/x86_64-w64-mingw32/lib -lole32 -loleaut32 -luuid -s -O3 -Wl,--gc-sections -nostartfiles --entry=pttb
 
 // Usage:
-//	> pttb PATH\TO\THE\PROGRAM\OR\SHORTCUT\TO\PIN\TO\TASKBAR
+//	> pttb Path\to\.exe\or\.lnk\to\PinToTaskbar
+//	> pttb -u Path\to\.exe\or\.lnk\to\UnPinFromTaskBar
 
 // Notes:
 //   - 1st tried the registry method described here:

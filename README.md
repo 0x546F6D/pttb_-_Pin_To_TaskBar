@@ -4,11 +4,11 @@
 Pin To TaskBar for command line:
 
   - Minimal reverse engineering of syspin.exe from https://www.technosys.net/products/utils/pintotaskbar
-  - With only "Pin to taskbar" functionality included
-  - However, in order to overwrite shorcuts in TaskBar, pttb does Unpin & Re-Pin them, but the programs gets re-pinned in last position
-  - Tested on Windows 10 Pro 64bit - Version 2004 / build 19041.685 / locale en-US
+  - With only "Pin to taskbar" and "Unpin from taskbar" functionalities included
+  - By default, pttb force Re-Pin any .exe/.lnk that is already pinned, but as a result: the programs gets re-pinned in last position
+  - Tested on Windows 10 Pro 64bit - Version 20H2 / build 19042.964 / locale en-US
   - Syspin.exe was decompiled using Retargetable Decompiler from https://retdec.com
-  - Another helpful reverse engineering project of syspin.exe in C++, which is much more faithful to the source : https://github.com/airwolf2026/Win10Pin2TB
+  - Another helpful reverse engineering project of syspin.exe in C++ (much more faithful to the source) : https://github.com/airwolf2026/Win10Pin2TB
 
 
 Compiled with MSYS2/MinGW-w64:
@@ -18,7 +18,8 @@ Compiled with MSYS2/MinGW-w64:
 
 Usage:
 
-	> pttb PATH\TO\THE\PROGRAM\OR\SHORTCUT\TO\PIN\TO\TASKBAR
+	> pttb Path\to\.exe\or\.lnk\to\PinToTaskbar
+	> pttb -u Path\to\.exe\or\.lnk\to\UnPinFromTaskBar
 
 
 Notes:
