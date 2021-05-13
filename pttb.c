@@ -7,15 +7,43 @@
 #include <Shldisp.h>
 #include <stdint.h>
 // #include <stdio.h>
-  
 // --------------------------- Variables Definition --------------------------- //
 #define NB_ARG 2
-// ----------------------- Project Functions Prototype ------------------------ //
-static unsigned long __stdcall PinToTaskBar_func(char* pdata);					// "Pin to tas&kbar" Function to call once injected in "Progman"
-void PinToTaskBar_core(char* dir_cp, char* file_cp, wchar_t* pttbVerb_wcp, wchar_t* upftbVerb_wcp, IShellDispatch* ISD_p);  // Core Function of "PinToTaskBar_func"
-void ExecuteVerb(wchar_t* verb_wcp, FolderItem* folderItem_p);					// Execute Verb if found
+#define REFRESH_TASKBAR	0
+#define DEFAULT_PIN		1
+#define ONLY_UNPIN		2
+// -------------------------- Structures Definition --------------------------- //
+struct locVirtAlloc_stc {	// Local Virtual Allocation Structure 
+	void* locVirtAlloc_vp;
+	long long moduleAdr_ll;
+	long long imgHeadAdr_ll;
+	unsigned long imgSize_ul;
+};
+struct remVirtAlloc_stc {	// Local Virtual Allocation Structure 
+	void* process_vp;
+	void* remVirtAlloc_vp;
+	long long relocOffset_ll;
+};
+// ----------------------- Program Functions Prototype ------------------------ //
 void CommandLineToArgvA(char* cmdLine_cp, char** args_cpa);						// Get arguments from command line.. just a personal preference for char* instead of the wchar_t* type provided by "CommandLineToArgvW()"
 void WriteToConsoleA(char* msg_cp);												// "Write to Console A" function to save >20KB compared to printf and <stdio.h>
+char NoArgPassed(char* args_cp);
+char CheckOption(char* args_cpa);
+char FileNotFound(char* argPath_cp, char argPath_ca[]);
+
+
+struct locVirtAlloc_stc SetLocVirtAlloc();
+struct remVirtAlloc_stc SetRemVirtAlloc(struct locVirtAlloc_stc* locVirtAlloc);
+void* GetProgmanProcess();
+long long ReloctVirtualAddress(struct locVirtAlloc_stc* locVirtAlloc, long long remVirtAllocAdr_ll);
+void PEInject(char argPath_ca[], char* option_p, struct locVirtAlloc_stc* locVirtAlloc, struct remVirtAlloc_stc* remVirtAlloc);
+
+static unsigned long __stdcall PinToTaskBar_func(char* pdata);					// "Pin to tas&kbar" Function to call once injected in "Progman"
+char* SeparateDirFile(char* data_cp);
+void GetPinVerbs(char option_c, wchar_t pttbVerb_wca[], wchar_t upftbVerb_wca[], wchar_t* pinVerbs[]);
+void CheckPinnedShorcut(char* file_cp, wchar_t* pinVerbs[], IShellDispatch* ISD_p);
+void PinToTaskBar_core(char* dir_cp, char* file_cp, wchar_t* pinVerbs[], IShellDispatch* ISD_p);  // Core Function of "PinToTaskBar_func"
+void ExecuteVerb(wchar_t* verb_wcp, FolderItem* folderItem_p);					// Execute Verb if found
 // void WriteHexToConsoleA(int num_i);											// "Write Integer as Hex to Console A" function to save >20KB compared to printf and <stdio.h>
 // void WriteToConsoleW(wchar_t* msg_cp);										// "Write to Console W" function to save >20KB compared to printf and <stdio.h>
 // -------------------------- C Functions Prototype --------------------------- //
@@ -24,56 +52,108 @@ int sprintf(char* buffer, const char* format, ...);								// https://docs.micro
 
 // ----------------------------- Global Variables ----------------------------- //
 void* __stdcall consOut_vp;
+// printf("\n FileNotFound: %s", argPath_ca);
+// ExitProcess(0);
 
 // --------------------------- entry point function --------------------------- //
 void pttb() {
 	consOut_vp = GetStdHandle(-11);
 // Get arguments from command line
-	char* args_cpa[NB_ARG+1] = {NULL};													// 1st "argument" isnt really one: it's this program path
-	char argPath_ca[MAX_PATH];													// Full path to exe or shortcut to Pin to TaskBar
+	char* args_cpa[NB_ARG+1] = {NULL};											// 1st "argument" isnt really one: it's this program path
 	char* cmdLine_cp = GetCommandLineA();
 	CommandLineToArgvA(cmdLine_cp, args_cpa);									// Get arguments from command line
-// Check that an argument was passed
-	if(!args_cpa[1]) {
-		WriteToConsoleA("\nERROR_BAD_ARGUMENTS: Arguments missing\n");
+// Check arguments
+	if(NoArgPassed(args_cpa[1])) {
+		ExitProcess(ERROR_BAD_ARGUMENTS); }
+	char option_c = CheckOption(args_cpa[1]);
+	char* argPath_cp = args_cpa[option_c];
+	if (!option_c && stricmp((char*)(argPath_cp+strlen(argPath_cp)-4),".exe")) {
+		strcat(argPath_cp, ".exe"); }
+	char argPath_ca[MAX_PATH];													// Full file path
+	if (FileNotFound(argPath_cp, argPath_ca)) {
+		ExitProcess(ERROR_FILE_NOT_FOUND); }
+// Set Local/remote Virtual Allocation and PE inject
+	struct locVirtAlloc_stc locVirtAlloc = SetLocVirtAlloc();
+	struct remVirtAlloc_stc remVirtAlloc = SetRemVirtAlloc(&locVirtAlloc);
+	PEInject(argPath_ca, &option_c, &locVirtAlloc, &remVirtAlloc);
+// Clean Up
+	VirtualFree(locVirtAlloc.locVirtAlloc_vp, 0, MEM_RELEASE);
+	VirtualFreeEx(remVirtAlloc.process_vp, remVirtAlloc.remVirtAlloc_vp, 0, MEM_RELEASE);
+	CloseHandle(remVirtAlloc.process_vp);
+	ExitProcess(0);
+}
+
+// --------------------- Check if an Argument was passed ---------------------- //
+char NoArgPassed(char* args_cp) {
+	if(!args_cp) {
+		WriteToConsoleA("\nERROR_BAD_ARGUMENTS: Arguments missing\n\nUsage:\n");
 		WriteToConsoleA("To Pin / Force Re-Pin: > pttb Path\\to\\.exe\\or\\.lnk\\to\\PinToTaskBar\n");
 		WriteToConsoleA("To UnPin Only:         > pttb -u Path\\to\\.exe\\or\\.lnk\\to\\UnPinFromTaskBar\n");
-		ExitProcess(0xA0); }													// 0xA0: ERROR_BAD_ARGUMENTS	
-// Check for Unpin Only argument
-	char justUnPin = 0;
-	if(args_cpa[NB_ARG] && (*(short*)args_cpa[1] == 0x752D || *(short*)args_cpa[1] == 0x552D)) { // 0x752D: u-, 0x552D: U-
-		justUnPin = 1;
-		args_cpa[1] = args_cpa[2]; }
-// Check if 1st argument is a path to a program or shortcut that exists, and get GetFullPathName if it does
-	if(access(args_cpa[1], 0) < 0 ) {
-		WriteToConsoleA("\nERROR_FILE_NOT_FOUND: \""); WriteToConsoleA(args_cpa[1]); WriteToConsoleA("\"\n");
-		ExitProcess(0x2); }														// 0x2: ERROR_FILE_NOT_FOUND
-	GetFullPathNameA(args_cpa[1], MAX_PATH, argPath_ca, NULL);
-// Get a Handle to the "Progman" process
-	unsigned long procId_ul;
-	GetWindowThreadProcessId(FindWindowA("Progman", NULL), &procId_ul);
-	void* process_vp = OpenProcess(0x2A, 0, procId_ul);							// 0x2A: PROCESS_CREATE_THREAD|PROCESS_VM_OPERATION|PROCESS_VM_WRITE
+		return TRUE; }
+	return FALSE;
+}
+
+// ---------------------- check if an option was passed ----------------------- //
+char CheckOption (char* args_cpa) {
+	switch (*(short*)args_cpa) {
+		case 0x752D:															// 0x752D: u-
+		case 0x552D:															// 0x552D: U-
+			return 2;
+		case 0x722D:															// 0x722D: r-
+		case 0x522D:															// 0x522D: R-
+			return 0;
+		default:
+            return 1; }
+}
+
+// -------------------- Check if file to pin/unpin exists --------------------- //
+char FileNotFound(char* argPath_cp, char argPath_ca[]) {
+	if(access(argPath_cp, 0) < 0 ) {
+		WriteToConsoleA("\nERROR_FILE_NOT_FOUND: \""); WriteToConsoleA(argPath_cp); WriteToConsoleA("\"\n");
+		return TRUE; }
+	GetFullPathNameA(argPath_cp, MAX_PATH, argPath_ca, NULL);
+	return FALSE;
+}
+
+// ---------------------- Allocate local virtual memory ----------------------- //
+struct locVirtAlloc_stc SetLocVirtAlloc() {
+	struct locVirtAlloc_stc locVirtAlloc;
 // Get relevant addresses to this current process, as well as the image size
 	void* module_vp = GetModuleHandleA(NULL);		
-	long long moduleAdr_ll = (long long)module_vp;
-	long long imgHeadAdr_ll = moduleAdr_ll + *(int*)(moduleAdr_ll + 0x3C);		// 0x3C: IMAGE_DOS_HEADER->e_lfanew (offset to IMAGE_NT_HEADERS)
-	unsigned long imgSize_ul = *(unsigned long*)(imgHeadAdr_ll + 0x50);			// 0x50: IMAGE_NT_HEADERS->IMAGE_OPTIONAL_HEADER->SizeOfImage (Size of current process in memory)
-	// WriteHexToConsoleA(imgSize_ul); WriteToConsoleA("\n");
+	locVirtAlloc.moduleAdr_ll = (long long)module_vp;
+	locVirtAlloc.imgHeadAdr_ll = locVirtAlloc.moduleAdr_ll + *(int*)(locVirtAlloc.moduleAdr_ll + 0x3C);		// 0x3C: IMAGE_DOS_HEADER->e_lfanew (offset to IMAGE_NT_HEADERS)
+	locVirtAlloc.imgSize_ul = *(unsigned long*)(locVirtAlloc.imgHeadAdr_ll + 0x50);			// 0x50: IMAGE_NT_HEADERS->IMAGE_OPTIONAL_HEADER->SizeOfImage (Size of current process in memory)
 // Reserve a local region of memory equal to "imgSize_ul" and make a copy of itself into it
-	void* locVirtAlloc_vp = VirtualAlloc(NULL, imgSize_ul, 0x3000, 0x40);		// 0x3000: MEM_COMMIT|MEM_RESERVE; 0x40: PAGE_EXECUTE_READWRITE
-	long long locVirtAllocAdr_ll = (long long)locVirtAlloc_vp;
-	memcpy(locVirtAlloc_vp, module_vp, imgSize_ul);
-// Reserve a region of memory equal to "imgSize_ul + MAX_PATH + 1" in the "Progman" process
-	void* remVirtAlloc_vp = VirtualAllocEx(process_vp, NULL, imgSize_ul+MAX_PATH+1, 0x3000, 0x40);
-	long long remVirtAllocAdr_ll = (long long)remVirtAlloc_vp;
-// Check if any Virtual Address in the current process need to be relocated 
-	long long relocTblAdr_ll = (*(int*)(imgHeadAdr_ll + 180) != 0) ? *(int*)(imgHeadAdr_ll + 176) : 0; // 176/180: IMAGE_NT_HEADERS->IMAGE_OPTIONAL_HEADER->IMAGE_DATA_DIRECTORY->Base relocation table address/size
-	long long locVirtRelocTblAdr_ll = locVirtAllocAdr_ll + relocTblAdr_ll;		// Address of the Relocation Table
-	long long relocOffset_ll = remVirtAllocAdr_ll - moduleAdr_ll;				// Relocation Offset between the current process and the reserved memory region in the "Progman" process
+	locVirtAlloc.locVirtAlloc_vp = VirtualAlloc(NULL, locVirtAlloc.imgSize_ul, MEM_COMMIT|MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+	memcpy(locVirtAlloc.locVirtAlloc_vp, module_vp, locVirtAlloc.imgSize_ul);
+	return locVirtAlloc;
+}
+
+// ---------------------- Allocate remote virtual memory ---------------------- //
+struct remVirtAlloc_stc SetRemVirtAlloc(struct locVirtAlloc_stc* locVirtAlloc) {
+	struct remVirtAlloc_stc remVirtAlloc;
+	remVirtAlloc.process_vp = GetProgmanProcess();
+	remVirtAlloc.remVirtAlloc_vp = VirtualAllocEx(remVirtAlloc.process_vp, NULL, locVirtAlloc->imgSize_ul+MAX_PATH+sizeof(char), MEM_COMMIT|MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+	remVirtAlloc.relocOffset_ll = ReloctVirtualAddress(locVirtAlloc, (long long)(remVirtAlloc.remVirtAlloc_vp));
+	return remVirtAlloc;
+}
+
+// --------------------------- Open Progman process --------------------------- //
+void* GetProgmanProcess() {
+	unsigned long procId_ul;
+	GetWindowThreadProcessId(FindWindowA("Progman", NULL), &procId_ul);
+	return OpenProcess(PROCESS_CREATE_THREAD|PROCESS_VM_OPERATION|PROCESS_VM_WRITE, 0, procId_ul);
+}
+
+// ----------------------- Relocate virtual address --------------------------- //
+long long ReloctVirtualAddress(struct locVirtAlloc_stc* locVirtAlloc, long long remVirtAllocAdr_ll) {
+	long long relocTblAdr_ll = (*(int*)(locVirtAlloc->imgHeadAdr_ll + 180)) ? *(int*)(locVirtAlloc->imgHeadAdr_ll + 176) : 0; // 176/180: IMAGE_NT_HEADERS->IMAGE_OPTIONAL_HEADER->IMAGE_DATA_DIRECTORY->Base relocation table address/size
+	long long locVirtRelocTblAdr_ll = (long long)locVirtAlloc->locVirtAlloc_vp + relocTblAdr_ll;		// Address of the Relocation Table
+	long long relocOffset_ll = remVirtAllocAdr_ll - locVirtAlloc->moduleAdr_ll;				// Relocation Offset between the current process and the reserved memory region in the "Progman" process
 // Relocate every block of virtual address
 	while (relocTblAdr_ll != 0) {
 		int	relocBlokSize_i = *(int*)(locVirtRelocTblAdr_ll + 4);				// Block size to relocate from Virtual Address (size of struct _IMAGE_BASE_RELOCATION included)
-		relocTblAdr_ll = locVirtAllocAdr_ll + *(int*)locVirtRelocTblAdr_ll;		// Virtual Address relocation offset according ImageBase
+		relocTblAdr_ll = (long long)locVirtAlloc->locVirtAlloc_vp + *(int*)locVirtRelocTblAdr_ll;		// Virtual Address relocation offset according ImageBase
 		locVirtRelocTblAdr_ll += 8;												// 8: size of struct _IMAGE_BASE_RELOCATION // jump to 1st Descriptor to relocate
 		if (relocBlokSize_i >= 8) {												// Block size must be > size of struct _IMAGE_BASE_RELOCATION in order to have any Descriptor
 			int	relocNbDesc_i = (relocBlokSize_i - 8) / 2;						// number of descriptors in this block: relocBlokSize_i in BYTE, but descriptors in short
@@ -82,63 +162,47 @@ void pttb() {
 				if (relocDescOffset_s != 0) { *(long long*)(relocTblAdr_ll + relocDescOffset_s) += relocOffset_ll; }  // Add "relocOffset_ll" to the value at this address
 				locVirtRelocTblAdr_ll += 2; } }									// Go to next descriptor
 		relocTblAdr_ll = *(int*)locVirtRelocTblAdr_ll; }						// Get Virtual Address of next Block
-// Remove wild breakpoint at beginning of main function -> still works fine without this line, probably because pttb doesnt have a main function
-//		*(int8_t*)(locVirtAllocAdr_ll+imgHeadAdr_ll-moduleAdr_ll+0x28) = 0x55;	// 0x28: IMAGE_NT_HEADERS->IMAGE_OPTIONAL_HEADER->AddressOfEntryPoint; 0x55: push %rbp
+	return relocOffset_ll;
+}
+
+// --------------------------- PE Injection function -------------------------- //
+void PEInject (char argPath_ca[], char* option_p, struct locVirtAlloc_stc* locVirtAlloc, struct remVirtAlloc_stc* remVirtAlloc) {
 // Inject local region of memory into "Progman" process region of memory
-	WriteProcessMemory(process_vp, remVirtAlloc_vp, locVirtAlloc_vp, imgSize_ul, NULL);
-	void* cmdBase_vp = (void*)(remVirtAllocAdr_ll + imgSize_ul);
-	WriteProcessMemory(process_vp, cmdBase_vp, argPath_ca, MAX_PATH, NULL);	// Copy the path to the file to pin to taskbar, into the extra memory of size "MAX_PATH"
-	WriteProcessMemory(process_vp, cmdBase_vp+MAX_PATH, &justUnPin, 1, NULL);	// Copy the path to the file to pin to taskbar, into the extra memory of size "MAX_PATH"
+	WriteProcessMemory(remVirtAlloc->process_vp, remVirtAlloc->remVirtAlloc_vp, locVirtAlloc->locVirtAlloc_vp, locVirtAlloc->imgSize_ul, NULL);
+	void* cmdBase_vp = (void*)((long long)(remVirtAlloc->remVirtAlloc_vp) + locVirtAlloc->imgSize_ul);
+	WriteProcessMemory(remVirtAlloc->process_vp, cmdBase_vp, argPath_ca, MAX_PATH, NULL);	// Copy the path to the file to pin to taskbar, into the extra memory of size "MAX_PATH"
+	WriteProcessMemory(remVirtAlloc->process_vp, cmdBase_vp+MAX_PATH, option_p, sizeof(char), NULL);	// Copy the path to the file to pin to taskbar, into the extra memory of size "MAX_PATH"
 // Run the "PinToTaskBar_func" in the "Progman" process, with the path to the file to pin to taskbar as a parameter
-	LPTHREAD_START_ROUTINE startRoutine_lptsr = (LPTHREAD_START_ROUTINE)(relocOffset_ll + PinToTaskBar_func);
-	void* thread_vp = CreateRemoteThread(process_vp, NULL, 0, startRoutine_lptsr, cmdBase_vp, 0, NULL);
+	LPTHREAD_START_ROUTINE startRoutine_lptsr = (LPTHREAD_START_ROUTINE)(remVirtAlloc->relocOffset_ll + PinToTaskBar_func);
+	void* thread_vp = CreateRemoteThread(remVirtAlloc->process_vp, NULL, 0, startRoutine_lptsr, cmdBase_vp, 0, NULL);
 // Wait for the Thread to finish and clean it up
-	WaitForSingleObject(thread_vp, 5000);
+	WaitForSingleObject(thread_vp, 10000);
 	TerminateThread(thread_vp, 0);
 	CloseHandle(thread_vp);
-// Clean Up Everything
-	VirtualFree(locVirtAlloc_vp, 0, 0x8000);									// 0x8000: MEM_RELEASE
-	VirtualFreeEx(process_vp, remVirtAlloc_vp, 0, 0x8000);
-	CloseHandle(process_vp);
-	ExitProcess(0);
 }
 
 // ---------------------------- "Pin to tas&kbar" ----------------------------- //
 // Note: Function to call once injected in "Progman"
 static unsigned long __stdcall PinToTaskBar_func(char* data_cp) {
-	char justUnPin = *(data_cp+MAX_PATH);
+	char option_c = *(data_cp+MAX_PATH);
 // Get directory and Filename from pdata
 	char* dir_cp = data_cp;
-	char* file_cp = NULL;
-	while (*data_cp) {
-		if(*data_cp == '\\') file_cp = data_cp;
-		data_cp++; }
-	*file_cp = 0;
-	file_cp += 1;
-// Get "Pin to tas&kbar" and "Unpin from tas&kbar" Verbs in Windows locale
-	wchar_t pttbVerb_wca[MAX_PATH] = {'\0'};
-	wchar_t* pttbVerb_wcp = NULL;
-	wchar_t upftbVerb_wca[MAX_PATH] = {'\0'};
-	wchar_t* upftbVerb_wcp = upftbVerb_wca;
-	void* shell32_vp = LoadLibraryW(L"shell32.dll");
-	if (!justUnPin) {
-		LoadStringW(GetModuleHandleW(L"shell32.dll"), 5386, pttbVerb_wca, MAX_PATH); // 5386: "Pin to tas&kbar" in en-us locale versions of Windows
-		pttbVerb_wcp = pttbVerb_wca; }
-	LoadStringW(GetModuleHandleW(L"shell32.dll"), 5387, upftbVerb_wca, MAX_PATH);	// 5387: "Unpin from tas&kbar" in en-us locale versions of Windows
-	FreeLibrary(shell32_vp);
+	char* file_cp = SeparateDirFile(data_cp);
+// Get Pin to taskbar and Unpin from taskbar Verbs
+	wchar_t pttbVerb_wca[MAX_PATH];
+	wchar_t upftbVerb_wca[MAX_PATH];
+	wchar_t* pinVerbs[2] = {NULL};
+	GetPinVerbs(option_c, pttbVerb_wca, upftbVerb_wca, pinVerbs);
 // Create COM Objects
 	CoInitialize(NULL);
 	IShellDispatch* ISD_p;
-	CoCreateInstance(&CLSID_Shell, NULL, 0x1, &IID_IShellDispatch, (void**)&ISD_p);	// 0x1: CLSCTX_INPROC_SERVER
+	CoCreateInstance(&CLSID_Shell, NULL, CLSCTX_INPROC_SERVER, &IID_IShellDispatch, (void**)&ISD_p);
 // Check if Shorcut is already pinned, and if so: unpin it directly from %AppData%\Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar\shorcut.lnk, because Windows föks up when Unpinning shorcuts whose target/arguments have been modified after getting pinned..
-	char tbStore_ca[MAX_PATH] = {'\0'};
-	sprintf(tbStore_ca, "%s\\Microsoft\\Internet Explorer\\Quick Launch\\User Pinned\\TaskBar", getenv("AppData"));
-	char tbShortCut_ca[MAX_PATH] = {'\0'};
-	sprintf(tbShortCut_ca, "%s\\%s", tbStore_ca, file_cp);
-	if (access(tbShortCut_ca, 0) == 0) {
-		PinToTaskBar_core(tbStore_ca, file_cp, NULL, upftbVerb_wcp, ISD_p);
-		upftbVerb_wcp = NULL; }
-	PinToTaskBar_core(dir_cp, file_cp, pttbVerb_wcp, upftbVerb_wcp, ISD_p);
+	if (option_c == REFRESH_TASKBAR) {
+		CheckPinnedShorcut(file_cp, pinVerbs, ISD_p); }
+	wchar_t* pttbVerb_wcp = (option_c) ? NULL : pttbVerb_wca;
+	if (pinVerbs[0]) {
+		PinToTaskBar_core(dir_cp, file_cp, pinVerbs, ISD_p); }
 // Clean Up
 	ISD_p->lpVtbl->Release(ISD_p);
 	CoUninitialize();
@@ -146,8 +210,52 @@ static unsigned long __stdcall PinToTaskBar_func(char* data_cp) {
 	return 0;
 }
 
+// ----------------------- Separate file name from path ----------------------- //
+char* SeparateDirFile(char* data_cp) {
+	char* file_cp = NULL;
+	while (*data_cp) {
+		if(*data_cp == '\\') file_cp = data_cp;
+		data_cp++; }
+	*file_cp = 0;
+	return file_cp+1;	
+}
+
+// ---------------------- Get Pin/Unpin Verbs in locale ----------------------- //
+void GetPinVerbs(char option_c, wchar_t pttbVerb_wca[], wchar_t upftbVerb_wca[], wchar_t* pinVerbs[]) {
+	void* shell32_vp = LoadLibraryW(L"shell32.dll");
+	LoadStringW(GetModuleHandleW(L"shell32.dll"), 5387, upftbVerb_wca, MAX_PATH);	// 5387: "Unpin from tas&kbar" in en-us locale versions of Windows
+	
+	if (option_c != ONLY_UNPIN) {
+		LoadStringW(GetModuleHandleW(L"shell32.dll"), 5386, pttbVerb_wca, MAX_PATH); } // 5386: "Pin to tas&kbar" in en-us locale versions of Windows
+	else {
+		pttbVerb_wca = NULL; }
+	FreeLibrary(shell32_vp);
+	
+	if (option_c == REFRESH_TASKBAR) {
+		pinVerbs[0] = pttbVerb_wca;
+		pinVerbs[1] = upftbVerb_wca; }
+	else{
+		pinVerbs[0] = upftbVerb_wca; 
+		pinVerbs[1] = pttbVerb_wca; }
+	return;
+}
+
+// --------- Check if file to pin/unpin is an already shorcut pinned ---------- //
+void CheckPinnedShorcut(char* file_cp, wchar_t* pinVerbs[], IShellDispatch* ISD_p) {
+	char tbStore_ca[MAX_PATH] = {'\0'};
+	sprintf(tbStore_ca, "%s\\Microsoft\\Internet Explorer\\Quick Launch\\User Pinned\\TaskBar", getenv("AppData"));
+	char tbShortCut_ca[MAX_PATH] = {'\0'};
+	sprintf(tbShortCut_ca, "%s\\%s", tbStore_ca, file_cp);
+	if (access(tbShortCut_ca, 0) == 0) {
+		wchar_t* pttbVerb_wcp = pinVerbs[1];
+		pinVerbs[1] = NULL;
+		PinToTaskBar_core(tbStore_ca, file_cp, pinVerbs, ISD_p);
+		pinVerbs[0] = pttbVerb_wcp; }
+	return;
+}
+
 // -------------------------- "Pin to tas&kbar" Core -------------------------- //
-void PinToTaskBar_core (char* dir_cp, char* file_cp, wchar_t* pttbVerb_wcp, wchar_t* upftbVerb_wcp, IShellDispatch* ISD_p) {
+void PinToTaskBar_core (char* dir_cp, char* file_cp, wchar_t* pinVerbs[], IShellDispatch* ISD_p) {
 // Convert to wchar_t for Variant VT_BSTR type
 	wchar_t	dir_wca[MAX_PATH] = {'\0'};
 	mbstowcs(dir_wca, dir_cp, MAX_PATH);
@@ -163,12 +271,11 @@ void PinToTaskBar_core (char* dir_cp, char* file_cp, wchar_t* pttbVerb_wcp, wcha
 // Create a "FolderItem" Object of the file to Pin/Unpin
 	FolderItem* folderItem_p;
 	folder_p->lpVtbl->ParseName(folder_p, file_wca, &folderItem_p);
-// Initialise the list of Verbs and search for "Unpin from tas&kbar". If found: execute it
-	if(upftbVerb_wcp) {
-		ExecuteVerb(upftbVerb_wcp, folderItem_p); }
-// Initialise the list of Verbs and search for "Pin to tas&kbar". If found: execute it
-	if(pttbVerb_wcp) {
-		ExecuteVerb(pttbVerb_wcp, folderItem_p); }
+// Initialise the list of Verbs and search for "Pin to tas&kbar" || "Unpin from tas&kbar". If found: execute it
+	int ct = 0;
+	while (pinVerbs[ct] != NULL && ct < 2) {
+		ExecuteVerb(pinVerbs[ct], folderItem_p);
+		ct++; }
 // Clean Up
 	folderItem_p->lpVtbl->Release(folderItem_p);
 	folder_p->lpVtbl->Release(folder_p);
@@ -176,6 +283,7 @@ void PinToTaskBar_core (char* dir_cp, char* file_cp, wchar_t* pttbVerb_wcp, wcha
 
 // ------------------------------ "Execute Verb" ------------------------------ //
 void ExecuteVerb(wchar_t* verb_wcp, FolderItem* folderItem_p) {
+// MessageBoxW(NULL, verb_wcp, L"Done", 0);
 	int verbLgt_i = wcsnlen(verb_wcp, MAX_PATH);
 // Create a "FolderItemVerbs" Object of the Verbs corresponding to the file, including "Pin to tas&kbar" or "Unpin from tas&kbar"
 	FolderItemVerbs* folderItemVerbs_p;
@@ -216,12 +324,12 @@ void CommandLineToArgvA(char* cmdLine_cp, char** args_cpa) {
 		if (*cmdLine_cp == '\"') { endChar_c = '\"'; cmdLine_cp++; }			// ..or as a double quote if argument is between double quotes
 		*args_cpa = cmdLine_cp;													// Save argument pointer
 // Find end of argument ' ' or '\"', while skipping '\\\"' if endChar_c = '\"'
-		int prevBackSlash_b = 0;
+		char prevBackSlash_b = 0;
 		while (*cmdLine_cp && (*cmdLine_cp != endChar_c || (endChar_c == '\"' && prevBackSlash_b))) {
 			prevBackSlash_b = 0;
-			int checkBackSlash_i = 0;
-			while(*(cmdLine_cp-checkBackSlash_i) == '\\') {
-				checkBackSlash_i++;
+			char checkBackSlash_c = 0;
+			while(*(cmdLine_cp-checkBackSlash_c) == '\\') {
+				checkBackSlash_c++;
 				prevBackSlash_b = !prevBackSlash_b; }
 			cmdLine_cp++; }
 		if(*cmdLine_cp) {
@@ -286,9 +394,9 @@ void WriteToConsoleA(char* msg_cp) {
 //     - Thanks Microsoft for making it a bit more difficult, I learned quite a bit with this little project
 
 // --------------------------- Functions Prototype ---------------------------- //
-// int access(const char* path, int mode);											// https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/access-waccess?view=msvc-160
-// int sprintf(char* buffer, const char* format, ...);								// https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/sprintf-sprintf-l-swprintf-swprintf-l-swprintf-l?view=msvc-160
-// void* __stdcall GetStdHandle(int nStdHandle);							// https://docs.microsoft.com/en-us/windows/console/getstdhandle
+// int access(const char* path, int mode);										// https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/access-waccess?view=msvc-160
+// int sprintf(char* buffer, const char* format, ...);							// https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/sprintf-sprintf-l-swprintf-swprintf-l-swprintf-l?view=msvc-160
+// void* __stdcall GetStdHandle(int nStdHandle);								// https://docs.microsoft.com/en-us/windows/console/getstdhandle
 // void* GetCommandLineA();														// https://docs.microsoft.com/en-us/windows/win32/api/processenv/nf-processenv-getcommandlinea
 // unsigned long strlen(const char *str);										// https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/strlen-wcslen-mbslen-mbslen-l-mbstrlen-mbstrlen-l?view=msvc-160
 // int __stdcall WriteConsoleA(void* hConsoleOutput, const char* lpBuffer,int nNumberOfCharsToWrite, unsigned long* lpNumberOfCharsWritten,void* lpReserved);  // https://docs.microsoft.com/en-us/windows/console/writeconsole
