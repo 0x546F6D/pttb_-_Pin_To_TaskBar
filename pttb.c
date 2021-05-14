@@ -8,10 +8,15 @@
 #include <stdint.h>
 // #include <stdio.h>
 // --------------------------- Variables Definition --------------------------- //
-#define NB_ARG 2
-#define REFRESH_TASKBAR	0
-#define DEFAULT_PIN		1
-#define ONLY_UNPIN		2
+#define NB_ARG				  2
+#define REFRESH_TASKBAR		  0
+#define DEFAULT_PIN			  1
+#define ONLY_UNPIN			  2
+#define DOS_HEAD_E_LFANEW	 60													// IMAGE_DOS_HEADER->e_lfanew: File address of new exe header
+#define OPT_HEAD_IMG_SIZE	 80											 		// IMAGE_OPTIONAL_HEADER->SizeOfImage
+#define RELOC_TBL_ADR		176												 	// IMAGE_NT_HEADERS->IMAGE_OPTIONAL_HEADER->IMAGE_DATA_DIRECTORY->Base relocation table address
+#define RELOC_TBL_SIZE		180												 	// IMAGE_NT_HEADERS->IMAGE_OPTIONAL_HEADER->IMAGE_DATA_DIRECTORY->Base relocation table size
+
 // -------------------------- Structures Definition --------------------------- //
 struct locVirtAlloc_stc {	// Local Virtual Allocation Structure 
 	void* locVirtAlloc_vp;
@@ -19,7 +24,7 @@ struct locVirtAlloc_stc {	// Local Virtual Allocation Structure
 	long long imgHeadAdr_ll;
 	unsigned long imgSize_ul;
 };
-struct remVirtAlloc_stc {	// Local Virtual Allocation Structure 
+struct remVirtAlloc_stc {	// Remote Virtual Allocation Structure 
 	void* process_vp;
 	void* remVirtAlloc_vp;
 	long long relocOffset_ll;
@@ -35,7 +40,7 @@ char FileNotFound(char* argPath_cp, char argPath_ca[]);
 struct locVirtAlloc_stc SetLocVirtAlloc();
 struct remVirtAlloc_stc SetRemVirtAlloc(struct locVirtAlloc_stc* locVirtAlloc);
 void* GetProgmanProcess();
-long long ReloctVirtualAddress(struct locVirtAlloc_stc* locVirtAlloc, long long remVirtAllocAdr_ll);
+long long RelocVirtualAddress(struct locVirtAlloc_stc* locVirtAlloc, long long remVirtAllocAdr_ll);
 void PEInject(char argPath_ca[], char* option_p, struct locVirtAlloc_stc* locVirtAlloc, struct remVirtAlloc_stc* remVirtAlloc);
 
 static unsigned long __stdcall PinToTaskBar_func(char* pdata);					// "Pin to tas&kbar" Function to call once injected in "Progman"
@@ -57,7 +62,7 @@ void* __stdcall consOut_vp;
 
 // --------------------------- entry point function --------------------------- //
 void pttb() {
-	consOut_vp = GetStdHandle(-11);
+	consOut_vp = GetStdHandle(STD_OUTPUT_HANDLE);
 // Get arguments from command line
 	char* args_cpa[NB_ARG+1] = {NULL};											// 1st "argument" isnt really one: it's this program path
 	char* cmdLine_cp = GetCommandLineA();
@@ -89,6 +94,7 @@ char NoArgPassed(char* args_cp) {
 		WriteToConsoleA("\nERROR_BAD_ARGUMENTS: Arguments missing\n\nUsage:\n");
 		WriteToConsoleA("To Pin / Force Re-Pin: > pttb Path\\to\\.exe\\or\\.lnk\\to\\PinToTaskBar\n");
 		WriteToConsoleA("To UnPin Only:         > pttb -u Path\\to\\.exe\\or\\.lnk\\to\\UnPinFromTaskBar\n");
+		WriteToConsoleA("To Refresh TaskBar:    > pttb -r\n");
 		return TRUE; }
 	return FALSE;
 }
@@ -121,8 +127,8 @@ struct locVirtAlloc_stc SetLocVirtAlloc() {
 // Get relevant addresses to this current process, as well as the image size
 	void* module_vp = GetModuleHandleA(NULL);		
 	locVirtAlloc.moduleAdr_ll = (long long)module_vp;
-	locVirtAlloc.imgHeadAdr_ll = locVirtAlloc.moduleAdr_ll + *(int*)(locVirtAlloc.moduleAdr_ll + 0x3C);		// 0x3C: IMAGE_DOS_HEADER->e_lfanew (offset to IMAGE_NT_HEADERS)
-	locVirtAlloc.imgSize_ul = *(unsigned long*)(locVirtAlloc.imgHeadAdr_ll + 0x50);			// 0x50: IMAGE_NT_HEADERS->IMAGE_OPTIONAL_HEADER->SizeOfImage (Size of current process in memory)
+	locVirtAlloc.imgHeadAdr_ll = locVirtAlloc.moduleAdr_ll + *(int*)(locVirtAlloc.moduleAdr_ll + DOS_HEAD_E_LFANEW); // E_LFANEW: File address of new exe header
+	locVirtAlloc.imgSize_ul = *(unsigned long*)(locVirtAlloc.imgHeadAdr_ll + OPT_HEAD_IMG_SIZE); // 0x50: IMAGE_NT_HEADERS->IMAGE_OPTIONAL_HEADER->SizeOfImage (Size of current process in memory)
 // Reserve a local region of memory equal to "imgSize_ul" and make a copy of itself into it
 	locVirtAlloc.locVirtAlloc_vp = VirtualAlloc(NULL, locVirtAlloc.imgSize_ul, MEM_COMMIT|MEM_RESERVE, PAGE_EXECUTE_READWRITE);
 	memcpy(locVirtAlloc.locVirtAlloc_vp, module_vp, locVirtAlloc.imgSize_ul);
@@ -134,7 +140,7 @@ struct remVirtAlloc_stc SetRemVirtAlloc(struct locVirtAlloc_stc* locVirtAlloc) {
 	struct remVirtAlloc_stc remVirtAlloc;
 	remVirtAlloc.process_vp = GetProgmanProcess();
 	remVirtAlloc.remVirtAlloc_vp = VirtualAllocEx(remVirtAlloc.process_vp, NULL, locVirtAlloc->imgSize_ul+MAX_PATH+sizeof(char), MEM_COMMIT|MEM_RESERVE, PAGE_EXECUTE_READWRITE);
-	remVirtAlloc.relocOffset_ll = ReloctVirtualAddress(locVirtAlloc, (long long)(remVirtAlloc.remVirtAlloc_vp));
+	remVirtAlloc.relocOffset_ll = RelocVirtualAddress(locVirtAlloc, (long long)(remVirtAlloc.remVirtAlloc_vp));
 	return remVirtAlloc;
 }
 
@@ -146,8 +152,8 @@ void* GetProgmanProcess() {
 }
 
 // ----------------------- Relocate virtual address --------------------------- //
-long long ReloctVirtualAddress(struct locVirtAlloc_stc* locVirtAlloc, long long remVirtAllocAdr_ll) {
-	long long relocTblAdr_ll = (*(int*)(locVirtAlloc->imgHeadAdr_ll + 180)) ? *(int*)(locVirtAlloc->imgHeadAdr_ll + 176) : 0; // 176/180: IMAGE_NT_HEADERS->IMAGE_OPTIONAL_HEADER->IMAGE_DATA_DIRECTORY->Base relocation table address/size
+long long RelocVirtualAddress(struct locVirtAlloc_stc* locVirtAlloc, long long remVirtAllocAdr_ll) {
+	long long relocTblAdr_ll = (*(int*)(locVirtAlloc->imgHeadAdr_ll + RELOC_TBL_SIZE)) ? *(int*)(locVirtAlloc->imgHeadAdr_ll + RELOC_TBL_ADR) : 0; // 176/180: IMAGE_NT_HEADERS->IMAGE_OPTIONAL_HEADER->IMAGE_DATA_DIRECTORY->Base relocation table address/size
 	long long locVirtRelocTblAdr_ll = (long long)locVirtAlloc->locVirtAlloc_vp + relocTblAdr_ll;		// Address of the Relocation Table
 	long long relocOffset_ll = remVirtAllocAdr_ll - locVirtAlloc->moduleAdr_ll;				// Relocation Offset between the current process and the reserved memory region in the "Progman" process
 // Relocate every block of virtual address
