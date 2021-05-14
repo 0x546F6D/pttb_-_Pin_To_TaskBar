@@ -2,11 +2,13 @@
 // Usage:
 //	> pttb Path\to\.exe\or\.lnk\to\PinToTaskbar
 //	> pttb -u Path\to\.exe\or\.lnk\to\UnPinFromTaskBar
+//	> pttb -r (to refresh the taskbar after modifying HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Taskband)
 
 // #include <windows.h>
 #include <Shldisp.h>
 #include <stdint.h>
 // #include <stdio.h>
+
 // --------------------------- Variables Definition --------------------------- //
 #define NB_ARG				  2
 #define REFRESH_TASKBAR		  0
@@ -16,7 +18,6 @@
 #define OPT_HEAD_IMG_SIZE	 80											 		// IMAGE_OPTIONAL_HEADER->SizeOfImage
 #define RELOC_TBL_ADR		176												 	// IMAGE_NT_HEADERS->IMAGE_OPTIONAL_HEADER->IMAGE_DATA_DIRECTORY->Base relocation table address
 #define RELOC_TBL_SIZE		180												 	// IMAGE_NT_HEADERS->IMAGE_OPTIONAL_HEADER->IMAGE_DATA_DIRECTORY->Base relocation table size
-
 // -------------------------- Structures Definition --------------------------- //
 struct locVirtAlloc_stc {	// Local Virtual Allocation Structure 
 	void* locVirtAlloc_vp;
@@ -246,7 +247,7 @@ void GetPinVerbs(char option_c, wchar_t pttbVerb_wca[], wchar_t upftbVerb_wca[],
 	return;
 }
 
-// --------- Check if file to pin/unpin is an already shorcut pinned ---------- //
+// --------- Check if file to pin/unpin is s shorcut already pinned ----------- //
 void CheckPinnedShorcut(char* file_cp, wchar_t* pinVerbs[], IShellDispatch* ISD_p) {
 	char tbStore_ca[MAX_PATH] = {'\0'};
 	sprintf(tbStore_ca, "%s\\Microsoft\\Internet Explorer\\Quick Launch\\User Pinned\\TaskBar", getenv("AppData"));
