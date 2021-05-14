@@ -205,9 +205,8 @@ static unsigned long __stdcall PinToTaskBar_func(char* data_cp) {
 	IShellDispatch* ISD_p;
 	CoCreateInstance(&CLSID_Shell, NULL, CLSCTX_INPROC_SERVER, &IID_IShellDispatch, (void**)&ISD_p);
 // Check if Shorcut is already pinned, and if so: unpin it directly from %AppData%\Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar\shorcut.lnk, because Windows föks up when Unpinning shorcuts whose target/arguments have been modified after getting pinned..
-	if (option_c == REFRESH_TASKBAR) {
+	if (option_c) {
 		CheckPinnedShorcut(file_cp, pinVerbs, ISD_p); }
-	wchar_t* pttbVerb_wcp = (option_c) ? NULL : pttbVerb_wca;
 	if (pinVerbs[0]) {
 		PinToTaskBar_core(dir_cp, file_cp, pinVerbs, ISD_p); }
 // Clean Up
