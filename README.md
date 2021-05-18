@@ -20,7 +20,7 @@ Usage:
 
 	> pttb Path\to\.exe\or\.lnk\to\PinToTaskbar
 	> pttb -u Path\to\.exe\or\.lnk\to\UnPinFromTaskBar
-	> pttb -r (Refresh taskbar by Pinning & UnPinning itself, in order to reflect changes made to :
+	> pttb -r (Refresh taskbar by Pinning & UnPinning itself, in order to reflect changes made to:
 	           HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Taskband)
 
 Notes:
