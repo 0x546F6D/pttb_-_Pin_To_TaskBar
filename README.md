@@ -20,9 +20,8 @@ Usage:
 
 	> pttb Path\to\.exe\or\.lnk\to\PinToTaskbar
 	> pttb -u Path\to\.exe\or\.lnk\to\UnPinFromTaskBar
-	> pttb -r (to refresh the taskbar after modifying HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Taskband)
 	> pttb -r (Refresh taskbar by Pinning & UnPinning itself,
-	           useful in order to reflect changes made to:
+	           -> useful in order to reflect changes made to :
 	           HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Taskband)
 
 Notes:
